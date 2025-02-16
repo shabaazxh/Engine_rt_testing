@@ -56,6 +56,13 @@ void vk::Scene::AddModel(GLTFModel& GLTF, MaterialManager& materialManager)
 		}
 	}
 
+	std::vector<Vertex> allVerts;
+	std::vector<uint32_t> allIndices;
+	std::vector<uint32_t> meshOffsets;
+
+	uint32_t vertexOffset = 0;
+	uint32_t indexOffset = 0;
+
 	for (auto& mesh : GLTF.meshes)
 	{
 		VkDeviceSize vertexSize = sizeof(mesh.vertices[0]) * mesh.vertices.size();
@@ -63,9 +70,30 @@ void vk::Scene::AddModel(GLTFModel& GLTF, MaterialManager& materialManager)
 
 		VkDeviceSize indexSize = sizeof(mesh.indices[0]) * mesh.indices.size();
 		CreateAndUploadBuffer(context, mesh.indices.data(), indexSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, mesh.indexBuffer);
+		
+		meshOffsets.push_back(vertexOffset);
+
+		allVerts.insert(allVerts.end(), mesh.vertices.begin(), mesh.vertices.end());
+
+		for (uint32_t idx : mesh.indices)
+		{
+			allIndices.push_back(idx + vertexOffset);
+		}
+
+		vertexOffset += mesh.vertices.size();
+		indexOffset  += mesh.indices.size();
 	}
 
 	
+	// now create the large vertex, index + mesh offset buffers
+	VkDeviceSize vertSize = sizeof(allVerts[0]) * allVerts.size();
+	CreateAndUploadBuffer(context, allVerts.data(), vertSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, vertexBuffer);
+
+	VkDeviceSize indexSize = sizeof(allIndices[0]) * allIndices.size();
+	CreateAndUploadBuffer(context, allIndices.data(), indexSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, indexBuffer);
+
+	VkDeviceSize offsetSize = sizeof(meshOffsets[0]) * meshOffsets.size();
+	CreateAndUploadBuffer(context, meshOffsets.data(), offsetSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, meshOffsetBuffer);
 
 	gltfModels.push_back(std::move(GLTF));
 

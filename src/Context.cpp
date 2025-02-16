@@ -500,9 +500,16 @@ void vk::Context::CreateLogicalDevice()
         .rayTracingPipeline = VK_TRUE
     };
 
+    VkPhysicalDeviceScalarBlockLayoutFeaturesEXT scalarBlockFeatures
+    {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES_EXT,
+        .pNext = &rtPipelineFeatures,
+        .scalarBlockLayout = VK_TRUE
+    };
+
     VkPhysicalDeviceFeatures2 deviceFeatures2{};
     deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-    deviceFeatures2.pNext = &rtPipelineFeatures;  
+    deviceFeatures2.pNext = &scalarBlockFeatures;
     deviceFeatures2.features.samplerAnisotropy = VK_TRUE;
 
     VkDeviceCreateInfo deviceInfo = {};

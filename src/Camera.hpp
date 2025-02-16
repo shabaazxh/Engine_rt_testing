@@ -10,9 +10,9 @@
 #include "Utils.hpp"
 #include <algorithm>
 
-constexpr float m_speedIncreaseAmount = 15.0f;
+constexpr float m_speedIncreaseAmount = 100.0f;
 constexpr float m_speedDecreaseAmount = 8.0f;
-constexpr float maxSpeed = 100.0;
+constexpr float maxSpeed = 500.0;
 constexpr float minSpeed = 1.0f;
 constexpr float defaultSpeed = 3.0f;
 

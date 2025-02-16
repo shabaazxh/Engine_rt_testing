@@ -246,7 +246,9 @@ void vk::RayPass::BuildDescriptors()
 		std::vector<VkDescriptorSetLayoutBinding> bindings = {
 			CreateDescriptorBinding(0, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_RAYGEN_BIT_KHR),
 			CreateDescriptorBinding(1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR),
-			CreateDescriptorBinding(2, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_RAYGEN_BIT_KHR)
+			CreateDescriptorBinding(2, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
+			CreateDescriptorBinding(3, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
+			CreateDescriptorBinding(4, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR)
 		};
 
 		m_descriptorSetLayout = CreateDescriptorSetLayout(context, bindings);
@@ -277,5 +279,21 @@ void vk::RayPass::BuildDescriptors()
 		bufferInfo.offset = 0;
 		bufferInfo.range = sizeof(CameraTransform);
 		UpdateDescriptorSet(context, 2, bufferInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+	}
+	
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		VkDescriptorBufferInfo vertexBufferInfo{};
+		vertexBufferInfo.buffer = scene->vertexBuffer.buffer;
+		vertexBufferInfo.offset = 0;
+		vertexBufferInfo.range = VK_WHOLE_SIZE;
+
+		VkDescriptorBufferInfo indexBufferInfo{};
+		indexBufferInfo.buffer = scene->indexBuffer.buffer;
+		indexBufferInfo.offset = 0;
+		indexBufferInfo.range = VK_WHOLE_SIZE;
+
+		UpdateDescriptorSet(context, 3, vertexBufferInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+		UpdateDescriptorSet(context, 4, indexBufferInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
 	}
 }

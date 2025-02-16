@@ -61,7 +61,7 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	// Add a directional light source defined earlier 
 	// Sponza is huge ( physical size not disc space ) when loaded
 	// so i reduced it significantly when rendering meshes (see DrawGLTF) in Scene.cpp
-	auto gltf = vk::LoadGLTF(context, "assets/GLTF/Sponza/Sponza.gltf");
+	auto gltf = vk::LoadGLTF(context, "assets/GLTF/Box/BoxTextured.gltf");
 
 	m_scene = std::make_shared<Scene>(context, m_materialManager);
 
@@ -101,9 +101,9 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	m_ShadowMap	    = std::make_unique<ShadowMap>(context, m_scene);
 	m_DepthPrepass  = std::make_unique<DepthPrepass>(context, m_scene, m_camera);
 	m_ForwardPass   = std::make_unique<ForwardPass>(context, m_ShadowMap->GetRenderTarget(), m_DepthPrepass->GetRenderTarget(), m_scene, m_camera);
-	m_CompositePass = std::make_unique<Composite>(context, m_ForwardPass->GetRenderTarget(), m_ForwardPass->GetRenderTarget());
+	m_RayPass = std::make_unique<RayPass>(context, m_scene, m_camera);
+	m_CompositePass = std::make_unique<Composite>(context, m_RayPass->GetRenderTarget(), m_ForwardPass->GetRenderTarget());
 	m_PresentPass   = std::make_unique<PresentPass>(context, m_CompositePass->GetRenderTarget()); 
-	m_RayPass       = std::make_unique<RayPass>(context, m_scene, m_camera);
 }
 
 void vk::Renderer::Destroy()

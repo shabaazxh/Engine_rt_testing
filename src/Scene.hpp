@@ -47,6 +47,13 @@ namespace vk
 		void CreateTLAS();
 		AccelerationStructure BottomLevelAccelerationStructure;
 		AccelerationStructure TopLevelAccelerationStructure;
+		std::vector<GLTFModel> gltfModels;
+
+
+
+		Buffer vertexBuffer;
+		Buffer indexBuffer;
+		Buffer meshOffsetBuffer;
 	private:
 		Context& context;
 		MaterialManager& materialManager;
@@ -56,8 +63,6 @@ namespace vk
 		std::vector<Light>  m_Lights;
 		LightBuffer m_LightBuffer;
 		std::vector<Buffer> m_LightUBO;
-		std::vector<GLTFModel> gltfModels;
-
 
 	};
 }
