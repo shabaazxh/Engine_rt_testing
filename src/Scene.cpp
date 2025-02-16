@@ -75,56 +75,80 @@ void vk::Scene::AddModel(GLTFModel& GLTF, MaterialManager& materialManager)
 
 // Maybe do it for a single mesh for now ?
 void vk::Scene::CreateBLAS()
-{
-	auto& mesh = gltfModels[0].meshes[4];
-	
-	VkDeviceAddress vertexBufferAddress = GetBufferDeviceAddress(context.device, mesh.vertexBuffer.buffer);
-	VkDeviceAddress indexBufferAddress  = GetBufferDeviceAddress(context.device, mesh.indexBuffer.buffer);
+{	
+	const uint32_t numMeshes = gltfModels[0].meshes.size();
+	std::vector<VkAccelerationStructureGeometryKHR> geometries;
+	geometries.reserve(numMeshes);  
+	std::vector<uint32_t> primitiveCount;
+	primitiveCount.reserve(numMeshes);
 
-	// Think we define a VkAccelerationStructureGeometryTrianglesDataKHR & VkAccelerationStructureGeometryKHR per mesh
-	VkAccelerationStructureGeometryTrianglesDataKHR triangles = {
-		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
-		.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT,
-		.vertexData = {.deviceAddress = vertexBufferAddress},
-		.vertexStride = sizeof(Vertex),
-		.maxVertex = static_cast<uint32_t>(mesh.vertices.size() - 1),
-		.indexType = VK_INDEX_TYPE_UINT32,
-		.indexData = {.deviceAddress = indexBufferAddress},
-		.transformData = {.deviceAddress = 0} // no transform data yet
-	};
+	std::vector<VkAccelerationStructureBuildRangeInfoKHR> buildInfos;
+	buildInfos.reserve(numMeshes);
 
-	VkAccelerationStructureGeometryKHR geometry =
-	{
-		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR,
-		.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR,
-		.geometry = {.triangles = triangles},
-		.flags = VK_GEOMETRY_OPAQUE_BIT_KHR
-	};
+	// First pass: collect all geometries and primitive counts
+	for (size_t i = 0; i < numMeshes; i++) {
 
+		auto& mesh = gltfModels[0].meshes[i];
+		VkDeviceAddress vertexBufferAddress = GetBufferDeviceAddress(context.device, mesh.vertexBuffer.buffer);
+		VkDeviceAddress indexBufferAddress = GetBufferDeviceAddress(context.device, mesh.indexBuffer.buffer);
 
-	VkAccelerationStructureBuildGeometryInfoKHR accelerationStructureBuildGeometeyInfo = {
+		const uint32_t numPrims = static_cast<uint32_t>(mesh.indices.size() / 3);
+		primitiveCount.push_back(numPrims);
+
+		VkAccelerationStructureGeometryTrianglesDataKHR triangles{
+			.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
+			.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT,
+			.vertexData = {.deviceAddress = vertexBufferAddress},
+			.vertexStride = sizeof(Vertex),
+			.maxVertex = static_cast<uint32_t>(mesh.vertices.size() - 1),
+			.indexType = VK_INDEX_TYPE_UINT32,
+			.indexData = {.deviceAddress = indexBufferAddress},
+			.transformData = {.deviceAddress = 0}
+		};
+
+		VkAccelerationStructureGeometryKHR geometry{
+			.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR,
+			.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR,
+			.geometry = {.triangles = triangles},
+			.flags = VK_GEOMETRY_OPAQUE_BIT_KHR
+		};
+
+		VkAccelerationStructureBuildRangeInfoKHR accelerationStructureBuildRangeInfo =
+		{
+			.primitiveCount = numPrims, // num tri
+			.primitiveOffset = 0,
+			.firstVertex = 0,
+			.transformOffset = 0
+		};
+
+		geometries.push_back(geometry);
+		buildInfos.push_back(accelerationStructureBuildRangeInfo);
+	}
+
+	// Build geometry info for all meshes at once
+	VkAccelerationStructureBuildGeometryInfoKHR accelerationStructureBuildGeometryInfo{
 		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
 		.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
 		.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR,
-		.geometryCount = 1,
-		.pGeometries = &geometry // maybe more if we have more than 1 mesh?
+		.geometryCount = static_cast<uint32_t>(geometries.size()),
+		.pGeometries = geometries.data()
 	};
 
-
-
-	VkAccelerationStructureBuildSizesInfoKHR accelerationStructureBuildSizesInfo = {
+	// Get size requirements for the entire BLAS
+	VkAccelerationStructureBuildSizesInfoKHR accelerationStructureBuildSizesInfo{
 		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR
 	};
 
-	const uint32_t primitiveCount = mesh.indices.size() / 3;
 	vkGetAccelerationStructureBuildSizesKHR(
 		context.device,
 		VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
-		&accelerationStructureBuildGeometeyInfo,
-		&primitiveCount,
+		&accelerationStructureBuildGeometryInfo,
+		primitiveCount.data(),
 		&accelerationStructureBuildSizesInfo
 	);
 
+	printf("Acceleration structure size: %zu\n", size_t(accelerationStructureBuildSizesInfo.accelerationStructureSize));
+	printf("Build Scratch size: %zu\n", size_t(accelerationStructureBuildSizesInfo.buildScratchSize));
 
 	BottomLevelAccelerationStructure.buffer = std::make_unique<Buffer>(
 		CreateBuffer(
@@ -159,22 +183,14 @@ void vk::Scene::CreateBLAS()
 		.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR,
 		.mode  = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR,
 		.dstAccelerationStructure = BottomLevelAccelerationStructure.handle,
-		.geometryCount = 1,
-		.pGeometries = &geometry,
+		.geometryCount = static_cast<uint32_t>(geometries.size()),
+		.pGeometries = geometries.data(),
 		.scratchData = {.deviceAddress = GetBufferDeviceAddress(context.device, scratchBuffer.buffer)}
 	};
 
 
-	VkAccelerationStructureBuildRangeInfoKHR accelerationStructureBuildRangeInfo =
-	{
-		.primitiveCount = static_cast<uint32_t>(mesh.indices.size() / 3), // num tri
-		.primitiveOffset = 0,
-		.firstVertex = 0,
-		.transformOffset = 0
-	};
-
-	std::vector< VkAccelerationStructureBuildRangeInfoKHR*> accelerationBuildStructureInfos = {
-		&accelerationStructureBuildRangeInfo
+	std::vector<VkAccelerationStructureBuildRangeInfoKHR*> accelerationBuildStructureInfos = {
+		buildInfos.data()
 	};
 
 	ExecuteSingleTimeCommands(context, [&](VkCommandBuffer cmd)
