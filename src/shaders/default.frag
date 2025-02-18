@@ -88,7 +88,7 @@ float GeometryTerm(vec3 normal, vec3 halfVector, vec3 lightDir, vec3 viewDir)
 	return G;
 }
 
-// Compute BRDF 
+// Compute BRDF
 vec3 CookTorranceBRDF(vec3 normal, vec3 halfVector, vec3 viewDir, vec3 lightDir, float metallic, float roughness, vec3 baseColor, vec3 LightColour)
 {
     vec3 F = Fresnel(halfVector, viewDir, baseColor, metallic);
@@ -158,7 +158,7 @@ void main()
 		vec3 LightColour = vec3(0.0);
 		bool isDirectional = lightData.lights[i].Type == 1 ? false : true;
 
-		if(!isDirectional) 
+		if(!isDirectional)
 		{
 			float dist = length(lightData.lights[i].LightPosition.xyz - WorldPos.xyz);
 
@@ -172,8 +172,8 @@ void main()
 		if(isDirectional) {
 			float shadowTerm = 1.0 - PCF(WorldPos.xyz);
 			outLight += shadowTerm * CookTorranceBRDF(wNormal, halfVector, viewDir, lightDir, metallic, roughness, color.xyz, LightColour);
-			
-		} 
+
+		}
 		else {
 			outLight += CookTorranceBRDF(wNormal, halfVector, viewDir, lightDir, metallic, roughness, color.xyz, LightColour);
 		}
@@ -181,7 +181,7 @@ void main()
 
 	float shadowTerm = 1.0 - PCF(WorldPos.xyz);
 	vec3 ambient = vec3(0.1) * color.rgb;
-	fragColor = vec4(vec3(ambient + outLight), 1.0);
+	fragColor = vec4(vec3(wNormal), 1.0);
 
 	float brightness = dot(fragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
 	if(brightness > 1.0)

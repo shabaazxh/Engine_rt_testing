@@ -67,12 +67,12 @@ vk::GLTFModel vk::LoadGLTF(const Context& context, const std::string& filepath)
 
         MeshData meshData(context);
 
-        // Mesh has primities. Primitives is just positions, tex, normals which make up the mesh 
+        // Mesh has primities. Primitives is just positions, tex, normals which make up the mesh
         for (size_t pi = 0; pi < gltfMesh.primitives_count; ++pi) {
-            
+
             const auto& gltfPrimitive = gltfMesh.primitives[pi];
             MeshPrimitive meshPrimitive{};
-            // Mesh primitive is basically a mesh e.g. curtain in sponza 
+            // Mesh primitive is basically a mesh e.g. curtain in sponza
             // Positions
             if (const cgltf_accessor* pos =
                 cgltf_find_accessor(&gltfPrimitive, cgltf_attribute_type_position, 0)) {
@@ -108,16 +108,16 @@ vk::GLTFModel vk::LoadGLTF(const Context& context, const std::string& filepath)
             for (size_t i = 0; i < meshPrimitive.positions.size(); i += 3)
             {
                 Vertex vertex = {};
-                vertex.pos = { meshPrimitive.positions[i], meshPrimitive.positions[i + 1], meshPrimitive.positions[i + 2] };
-                vertex.normal = { meshPrimitive.normals[i], meshPrimitive.normals[i + 1], meshPrimitive.normals[i + 2] };
-
+                vertex.pos = { meshPrimitive.positions[i], meshPrimitive.positions[i + 1], meshPrimitive.positions[i + 2], 1.0f };
+                vertex.normal = { meshPrimitive.normals[i], meshPrimitive.normals[i + 1], meshPrimitive.normals[i + 2], 0.0f };
+                //vertex.quaternion = { 0, 0, 0 };
                 // tex coord index
                 size_t texIndex = (i / 3) * 2;
                 if (texIndex + 1 < meshPrimitive.texcoords.size()) {
                     vertex.tex = { meshPrimitive.texcoords[texIndex], meshPrimitive.texcoords[texIndex + 1] };
                 }
                 else {
-                    vertex.tex = { 0.0f, 0.0f }; 
+                    vertex.tex = { 0.0f, 0.0f };
                 }
 
                 meshData.vertices.push_back(vertex);
@@ -125,11 +125,11 @@ vk::GLTFModel vk::LoadGLTF(const Context& context, const std::string& filepath)
 
             // Each material has a descriptor set
             // If each material is stored in array and the mesh has a material index
-            // We would just need to index into the material array, 
-            // bind the descriptor set for that material 
+            // We would just need to index into the material array,
+            // bind the descriptor set for that material
             // perhaps use set = 1 for materials
 
-            // Material 
+            // Material
             cgltf_material* material = gltfPrimitive.material;
             // std::printf("Diff: %s\n", material->pbr_metallic_roughness.base_color_texture.texture->image->uri);
             // find index
@@ -143,13 +143,13 @@ vk::GLTFModel vk::LoadGLTF(const Context& context, const std::string& filepath)
                 }
             }
 
-            // Get the texture paths for this meshes material  
+            // Get the texture paths for this meshes material
             // neeed to get other textures and multipliers
             const cgltf_pbr_metallic_roughness& pbr = material->pbr_metallic_roughness;
 
             const std::string albedoPath = SetDirectory(filepath, pbr.base_color_texture.texture->image->uri);
             std::string metallicRoughness = "";
-            
+
             if (pbr.metallic_roughness_texture.texture == NULL) {
                 char defaultRoughness[] = "defaultRoughness.jpg"; // this JPG needs to be copied into each mesh dir e.g. Sponza/sponza.gltf, Sponza directory needs a copy
                 metallicRoughness = SetDirectory(filepath, defaultRoughness);
@@ -161,9 +161,9 @@ vk::GLTFModel vk::LoadGLTF(const Context& context, const std::string& filepath)
 
             meshData.textures.push_back(albedoPath);
             meshData.textures.push_back(metallicRoughness);
-            
+
             meshData.materialIndex = matIndex;
-            model.name = filepath; // using filepath for now 
+            model.name = filepath; // using filepath for now
             model.meshes.emplace_back(std::move(meshData));
         }
     }
@@ -174,7 +174,7 @@ vk::GLTFModel vk::LoadGLTF(const Context& context, const std::string& filepath)
 }
 
 
-// ======================== Material ======================== 
+// ======================== Material ========================
 vk::Material::Material(vk::Context& context) : context{ context }, isValid{ false } {}
 
 
@@ -220,8 +220,8 @@ void vk::MaterialManager::BuildMaterials(Context& context)
     {
         AllocateDescriptorSet(context, context.descriptorPool, vk::materialDescriptorSetLayout, 1, materialDescriptorSets[i]);
 
-        // For all textures this current material needs to point to 
-        // For each img in textures, create a descriptor image info for the descriptor to point to 
+        // For all textures this current material needs to point to
+        // For each img in textures, create a descriptor image info for the descriptor to point to
         for (size_t img = 0; img < materials[i].textures.size(); img++) {
 
             VkDescriptorImageInfo imageInfo = {

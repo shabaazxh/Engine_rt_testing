@@ -7,9 +7,9 @@
 
 namespace
 {
-	// This should be placed elsewhere. Put here for simplicity while testing 
+	// This should be placed elsewhere. Put here for simplicity while testing
 	// Don't really need to define these, can pass the pos, dir, up directly to camera constructor
-	// Camera default values 
+	// Camera default values
 	constexpr glm::vec3 cameraPos = glm::vec3(1.0f, 1.0f, 1.0f); //1.0f, 2.0f, -24.0f
 	constexpr glm::vec3 cameraDir = glm::vec3(1.0f, 1.0f, -1.0f);
 	constexpr glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0);
@@ -33,10 +33,10 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	repeatSamplerAniso	 	  = CreateSampler(context, VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_TRUE,  VK_COMPARE_OP_LESS_OR_EQUAL);
 	repeatSampler			  = CreateSampler(context, VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_FALSE, VK_COMPARE_OP_LESS_OR_EQUAL);
 	clampToEdgeSamplerAniso   = CreateSampler(context, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_FALSE, VK_COMPARE_OP_GREATER);
-	
+
 	// Camera
 	m_camera = std::make_shared<Camera>(context, cameraPos, glm::normalize(cameraPos + cameraDir), up, context.extent.width / (float)context.extent.height);
-	
+
 	// GLFW callbacks
 	glfwSetWindowUserPointer(context.window, m_camera.get());
 	glfwSetKeyCallback(context.window, &glfwHandleKeyboard);
@@ -57,11 +57,11 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	}
 
 	// Create the scene which will store models and lights
-	// Add GLTF to the scene 
-	// Add a directional light source defined earlier 
+	// Add GLTF to the scene
+	// Add a directional light source defined earlier
 	// Sponza is huge ( physical size not disc space ) when loaded
 	// so i reduced it significantly when rendering meshes (see DrawGLTF) in Scene.cpp
-	auto gltf = vk::LoadGLTF(context, "assets/GLTF/Box/BoxTextured.gltf");
+	auto gltf = vk::LoadGLTF(context, "assets/GLTF/Sponza/Sponza.gltf");
 
 	m_scene = std::make_shared<Scene>(context, m_materialManager);
 
@@ -75,7 +75,7 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	//	m_scene->AddModel(box, m_materialManager);
 	//}
 
-	// Loop through the positions and instantiate a light 
+	// Loop through the positions and instantiate a light
 	// and pass to the scene to add the lights to the scene
 	for (const auto& position : spotLightPositions)
 	{
@@ -86,13 +86,13 @@ vk::Renderer::Renderer(Context& context) : context{context}
 			glm::linearRand(0.0f, 1.0f),
 			glm::linearRand(0.0f, 1.f),
 			glm::linearRand(0.0f, 1.0f),
-			1.0f 
-		);		
+			1.0f
+		);
 		m_scene->AddLightSource(spotLight);
 	}
 
-	// Models should not all be loaded 
-	// We have the data to build materials 
+	// Models should not all be loaded
+	// We have the data to build materials
 	m_materialManager.BuildMaterials(context);
 
 	std::cout << "Number of Lights: " << m_scene->GetLights().size() << std::endl;
@@ -101,9 +101,9 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	m_ShadowMap	    = std::make_unique<ShadowMap>(context, m_scene);
 	m_DepthPrepass  = std::make_unique<DepthPrepass>(context, m_scene, m_camera);
 	m_ForwardPass   = std::make_unique<ForwardPass>(context, m_ShadowMap->GetRenderTarget(), m_DepthPrepass->GetRenderTarget(), m_scene, m_camera);
-	m_RayPass = std::make_unique<RayPass>(context, m_scene, m_camera);
+	m_RayPass		= std::make_unique<RayPass>(context, m_scene, m_camera);
 	m_CompositePass = std::make_unique<Composite>(context, m_RayPass->GetRenderTarget(), m_ForwardPass->GetRenderTarget());
-	m_PresentPass   = std::make_unique<PresentPass>(context, m_CompositePass->GetRenderTarget()); 
+	m_PresentPass   = std::make_unique<PresentPass>(context, m_CompositePass->GetRenderTarget());
 }
 
 void vk::Renderer::Destroy()
@@ -362,7 +362,7 @@ void vk::Renderer::glfwHandleKeyboard(GLFWwindow* window, int key, int scancode,
 		case GLFW_KEY_A:
 			camera->inputMap[std::size_t(EInputState::LEFT)] = !isReleased;
 			break;
-	
+
 		case GLFW_KEY_D:
 			camera->inputMap[std::size_t(EInputState::RIGHT)] = !isReleased;
 			break;
@@ -406,7 +406,7 @@ void vk::Renderer::glfwMouseButtonCallback(GLFWwindow* window, int button, int a
 	{
 		auto& flag = camera->inputMap[std::size_t(EInputState::MOUSING)];
 
-		flag = !flag; // we're using mouse now 
+		flag = !flag; // we're using mouse now
 		if (flag)
 		{
 			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -419,7 +419,7 @@ void vk::Renderer::glfwMouseButtonCallback(GLFWwindow* window, int button, int a
 	}
 }
 
-// Get the current mouse position 
+// Get the current mouse position
 void vk::Renderer::glfwCallbackMotion(GLFWwindow* window, double x, double y)
 {
 	auto camera = static_cast<Camera*>(glfwGetWindowUserPointer(window));

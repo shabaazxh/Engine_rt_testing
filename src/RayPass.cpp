@@ -45,11 +45,11 @@ vk::RayPass::RayPass(Context& context, std::shared_ptr<Scene>& scene, std::share
 	ExecuteSingleTimeCommands(context, [&](VkCommandBuffer cmd) {
 
 		ImageTransition(
-			cmd, 
-			m_RenderTarget.image, 
-			VK_FORMAT_R16G16B16A16_SFLOAT, 
-			VK_IMAGE_LAYOUT_UNDEFINED, 
-			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 
+			cmd,
+			m_RenderTarget.image,
+			VK_FORMAT_R16G16B16A16_SFLOAT,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0,
 			VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
 		);
 	});
@@ -116,42 +116,42 @@ void vk::RayPass::Execute(VkCommandBuffer cmd)
 
 
 	ImageTransition(
-		cmd, 
-		m_RenderTarget.image, 
-		VK_FORMAT_R16G16B16A16_SFLOAT, 
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, 
-		VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT, 
+		cmd,
+		m_RenderTarget.image,
+		VK_FORMAT_R16G16B16A16_SFLOAT,
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+		VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
 		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR
 	);
 
-	VkStridedDeviceAddressRegionKHR raygen_shader_sbt_entry{};
-	raygen_shader_sbt_entry.deviceAddress = GetBufferDeviceAddress(context.device, RayGenShaderBindingTable->buffer);
-	raygen_shader_sbt_entry.stride = handle_size_aligned;
-	raygen_shader_sbt_entry.size = handle_size_aligned;
+		VkStridedDeviceAddressRegionKHR raygen_shader_sbt_entry{};
+		raygen_shader_sbt_entry.deviceAddress = GetBufferDeviceAddress(context.device, RayGenShaderBindingTable->buffer);
+		raygen_shader_sbt_entry.stride = handle_size_aligned;
+		raygen_shader_sbt_entry.size = handle_size_aligned;
 
-	VkStridedDeviceAddressRegionKHR miss_shader_sbt_entry{};
-	miss_shader_sbt_entry.deviceAddress = GetBufferDeviceAddress(context.device, MissShaderBindingTable->buffer);
-	miss_shader_sbt_entry.stride = handle_size_aligned;
-	miss_shader_sbt_entry.size = handle_size_aligned;
+		VkStridedDeviceAddressRegionKHR miss_shader_sbt_entry{};
+		miss_shader_sbt_entry.deviceAddress = GetBufferDeviceAddress(context.device, MissShaderBindingTable->buffer);
+		miss_shader_sbt_entry.stride = handle_size_aligned;
+		miss_shader_sbt_entry.size = handle_size_aligned;
 
-	VkStridedDeviceAddressRegionKHR hit_shader_sbt_entry{};
-	hit_shader_sbt_entry.deviceAddress = GetBufferDeviceAddress(context.device, HitShaderBindingTable->buffer);
-	hit_shader_sbt_entry.stride = handle_size_aligned;
-	hit_shader_sbt_entry.size = handle_size_aligned;
+		VkStridedDeviceAddressRegionKHR hit_shader_sbt_entry{};
+		hit_shader_sbt_entry.deviceAddress = GetBufferDeviceAddress(context.device, HitShaderBindingTable->buffer);
+		hit_shader_sbt_entry.stride = handle_size_aligned;
+		hit_shader_sbt_entry.size = handle_size_aligned;
 
-	VkStridedDeviceAddressRegionKHR callable_shader_sbt_entry{};
+		VkStridedDeviceAddressRegionKHR callable_shader_sbt_entry{};
 
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, m_Pipeline);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, m_PipelineLayout, 0, 1, &m_descriptorSets[currentFrame], 0, nullptr);
 	vkCmdTraceRaysKHR(cmd, &raygen_shader_sbt_entry, &miss_shader_sbt_entry, &hit_shader_sbt_entry, &callable_shader_sbt_entry, context.extent.width, context.extent.height, 1);
 
 	ImageTransition(
-		cmd, 
-		m_RenderTarget.image, 
-		VK_FORMAT_R16G16B16A16_SFLOAT, 
-		VK_IMAGE_LAYOUT_GENERAL, 
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
-		VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, 
+		cmd,
+		m_RenderTarget.image,
+		VK_FORMAT_R16G16B16A16_SFLOAT,
+		VK_IMAGE_LAYOUT_GENERAL,
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
 		VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
 	);
 
@@ -167,11 +167,14 @@ void vk::RayPass::Update()
 
 void vk::RayPass::CreatePipeline()
 {
-	// Create the pipeline 
-	auto pipelineResult = vk::PipelineBuilder(context, PipelineType::RAY, VertexBinding::NONE, 0)
+	// Create the pipeline
+	auto pipelineResult = vk::PipelineBuilder(context, PipelineType::RAYTRACING, VertexBinding::NONE, 0)
 		.AddShader("assets/shaders/raygen.rgen.spv", ShaderType::RAYGEN)
 		.AddShader("assets/shaders/miss.rmiss.spv", ShaderType::MISS)
 		.AddShader("assets/shaders/closesthit.rchit.spv", ShaderType::HIT)
+		.CreateShaderGroup(VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR, 0) // raygen
+		.CreateShaderGroup(VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR, 1) // miss
+		.CreateShaderGroup(VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR, VK_SHADER_UNUSED_KHR, 2)
 		.SetPipelineLayout({ {m_descriptorSetLayout} })
 		.Build();
 
@@ -183,7 +186,7 @@ void vk::RayPass::CreatePipeline()
 
 void vk::RayPass::CreateShaderBindingTable()
 {
-	// Now create the shader binding table 
+	// Now create the shader binding table
 	VkPhysicalDeviceRayTracingPipelinePropertiesKHR rayTracingPipelineProperties{};
 	rayTracingPipelineProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
 	VkPhysicalDeviceProperties2 deviceProperties = {};
@@ -248,7 +251,8 @@ void vk::RayPass::BuildDescriptors()
 			CreateDescriptorBinding(1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR),
 			CreateDescriptorBinding(2, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
 			CreateDescriptorBinding(3, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
-			CreateDescriptorBinding(4, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR)
+			CreateDescriptorBinding(4, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
+			CreateDescriptorBinding(5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR)
 		};
 
 		m_descriptorSetLayout = CreateDescriptorSetLayout(context, bindings);
@@ -280,7 +284,7 @@ void vk::RayPass::BuildDescriptors()
 		bufferInfo.range = sizeof(CameraTransform);
 		UpdateDescriptorSet(context, 2, bufferInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 	}
-	
+
 	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
 	{
 		VkDescriptorBufferInfo vertexBufferInfo{};
@@ -293,7 +297,13 @@ void vk::RayPass::BuildDescriptors()
 		indexBufferInfo.offset = 0;
 		indexBufferInfo.range = VK_WHOLE_SIZE;
 
+		VkDescriptorBufferInfo offsetBufferInfo{};
+		offsetBufferInfo.buffer = scene->meshOffsetBuffer.buffer;
+		offsetBufferInfo.offset = 0;
+		offsetBufferInfo.range = VK_WHOLE_SIZE;
+
 		UpdateDescriptorSet(context, 3, vertexBufferInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
 		UpdateDescriptorSet(context, 4, indexBufferInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+		UpdateDescriptorSet(context, 5, offsetBufferInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
 	}
 }

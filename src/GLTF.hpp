@@ -13,15 +13,15 @@
 // Scene should release the resources of the GLTF
 // GLTF Model class needs a move constructor and the GLTF mesh should be handled that way
 
-// Moved Vertex into here since it's only relevant for for the GLTF Mesh to use 
+// Moved Vertex into here since it's only relevant for for the GLTF Mesh to use
 namespace vk
 {
 	struct Vertex
 	{
-		glm::vec3 pos;
+		glm::vec4 pos;
+		glm::vec4 normal;
 		glm::vec2 tex;
-		glm::vec3 normal;
-		std::array<uint8_t, 3> quaternion;
+		//std::array<uint8_t, 3> quaternion;
 
 		static VkVertexInputBindingDescription GetBindingDescription()
 		{
@@ -33,29 +33,29 @@ namespace vk
 			return bindingDescrip;
 		}
 
-		static std::array<VkVertexInputAttributeDescription, 4> GetAttributeDescriptions()
+		static std::array<VkVertexInputAttributeDescription, 3> GetAttributeDescriptions()
 		{
-			std::array<VkVertexInputAttributeDescription, 4> attributes = {};
+			std::array<VkVertexInputAttributeDescription, 3> attributes = {};
 
 			attributes[0].binding = 0;
 			attributes[0].location = 0;
-			attributes[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+			attributes[0].format = VK_FORMAT_R32G32B32A32_SFLOAT;
 			attributes[0].offset = offsetof(Vertex, pos);
 
 			attributes[1].binding = 0;
 			attributes[1].location = 1;
-			attributes[1].format = VK_FORMAT_R32G32_SFLOAT;
-			attributes[1].offset = offsetof(Vertex, tex);
+			attributes[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+			attributes[1].offset = offsetof(Vertex, normal);
 
 			attributes[2].binding = 0;
 			attributes[2].location = 2;
-			attributes[2].format = VK_FORMAT_R32G32B32_SFLOAT;
-			attributes[2].offset = offsetof(Vertex, normal);
+			attributes[2].format = VK_FORMAT_R32G32_SFLOAT;
+			attributes[2].offset = offsetof(Vertex, tex);
 
-			attributes[3].binding = 0;
-			attributes[3].location = 3;
-			attributes[3].format = VK_FORMAT_R8G8B8_UINT;
-			attributes[3].offset = offsetof(Vertex, quaternion);
+			//attributes[3].binding = 0;
+			//attributes[3].location = 3;
+			//attributes[3].format = VK_FORMAT_R8G8B8_UINT;
+			//attributes[3].offset = offsetof(Vertex, quaternion);
 
 			return attributes;
 		}
@@ -69,18 +69,18 @@ namespace vk
 		std::vector<std::uint32_t> indices;
 	};
 
-	// Material, Material Manager are defined here for simplicity when testing and debugging 
-	// they should be moved into their respective classes 
+	// Material, Material Manager are defined here for simplicity when testing and debugging
+	// they should be moved into their respective classes
 
 	class Context;
 	class Material
 	{
 	public:
-		// Take in textures array and load the Images inside material so material will be responsible 
-		// for destroying those vulkan resources as well once finished 
+		// Take in textures array and load the Images inside material so material will be responsible
+		// for destroying those vulkan resources as well once finished
 		Material(Context& context);
 
-		Material(Material&& other) noexcept : 
+		Material(Material&& other) noexcept :
 			context(other.context),
 			textures(std::exchange(other.textures, {})),
 			isValid(other.isValid)
@@ -88,8 +88,8 @@ namespace vk
 
 		Material& operator=(Material&& other) noexcept {
 			if (this != &other) {
-				Destroy();  
-				textures = std::move(other.textures);  
+				Destroy();
+				textures = std::move(other.textures);
 			}
 			return *this;
 		}
@@ -117,20 +117,20 @@ namespace vk
 	struct MeshData;
 	struct MaterialManager
 	{
-		// Material has the GPU textures 
+		// Material has the GPU textures
 		// We just need a descriptor for each material
 		// Each mesh has a unique material index and it can index into descriptor array
-		// to get and bind the correct material descriptor which will have its textures 
+		// to get and bind the correct material descriptor which will have its textures
 		std::vector<Material> materials;
 		std::vector<VkDescriptorSet> materialDescriptorSets;
-		// VkDescriptorSetLayout materialDescriptorSetLayout; // TODO: temp (needs to be discussed where this should go) 
+		// VkDescriptorSetLayout materialDescriptorSetLayout; // TODO: temp (needs to be discussed where this should go)
 
-		void Setup(Context& context); // creates the descriptor set layout by calling the method 
-		void Destroy(Context& context); 
-		void CreateDescriptorLayout(Context& context); // descriptor set layout for materials 
+		void Setup(Context& context); // creates the descriptor set layout by calling the method
+		void Destroy(Context& context);
+		void CreateDescriptorLayout(Context& context); // descriptor set layout for materials
 		void BuildMaterials(Context& context); // creates the materials
 
-		uint32_t GetNextAvailableIndex() { 
+		uint32_t GetNextAvailableIndex() {
 
 			for (size_t i = 0; i < materials.size(); i++)
 			{
@@ -149,9 +149,9 @@ namespace vk
 	};
 
 	// This is behaving like "Mesh" but I made my own so I did not edit
-	// the pre-existing mesh structure 
-	// This can be re-named to Mesh or moved into Mesh 
-	// Needs to be more nicely organized 
+	// the pre-existing mesh structure
+	// This can be re-named to Mesh or moved into Mesh
+	// Needs to be more nicely organized
 	struct MeshData
 	{
 		const Context& context;
@@ -206,16 +206,16 @@ namespace vk
 
 namespace vk
 {
-	// Defines a single GLTFModel for now 
-	// Model consists of meshes 
+	// Defines a single GLTFModel for now
+	// Model consists of meshes
 	// Though we could continue to use it like this, a scene consists of many models
-	// each model can be loaded and stored as this class type 
+	// each model can be loaded and stored as this class type
 	class GLTFModel
 	{
 	public:
 		GLTFModel(const Context& context) : context{ context } {}
 
-		void Destroy() 
+		void Destroy()
 		{
 			// This will invoke the destructor of all MeshData instances
 			meshes.clear();
@@ -244,7 +244,7 @@ namespace vk
 		std::string name;
 	};
 
-	
+
 	GLTFModel LoadGLTF(const Context& context, const std::string& filepath);
-	
+
 }

@@ -1,7 +1,7 @@
 #include "Scene.hpp"
 #include <unordered_map>
 
-vk::Scene::Scene(Context& context, MaterialManager& materialManager) : context(context), materialManager{ materialManager } 
+vk::Scene::Scene(Context& context, MaterialManager& materialManager) : context(context), materialManager{ materialManager }
 {
 	m_LightUBO.resize(MAX_FRAMES_IN_FLIGHT);
 	// Light uniform buffers
@@ -12,21 +12,21 @@ vk::Scene::Scene(Context& context, MaterialManager& materialManager) : context(c
 
 void vk::Scene::AddModel(GLTFModel& GLTF, MaterialManager& materialManager)
 {
-	// Check if the material index this mesh refers to is already in-use 
+	// Check if the material index this mesh refers to is already in-use
 	for (auto& mesh : GLTF.meshes)
 	{
 		if (materialManager.materialLookup[mesh.materialIndex] > 0)
 		{
-			// This index is already in use 
+			// This index is already in use
 			// How can i check if this is a unique material for the mesh or an existing one ?
 			auto& material = materialManager.materials[mesh.materialIndex];
 			bool isSameAlbedo   = material.textures[0].name == mesh.textures[0];
 			bool isSameMetRough = material.textures[1].name == mesh.textures[1];
-			
+
 			if (isSameAlbedo && isSameMetRough)
 			{
-				materialManager.materialLookup[mesh.materialIndex]++; // just keeping track of how many meshes might be using thi could be useful someday 
-				continue; // material is the same, just re-use it 
+				materialManager.materialLookup[mesh.materialIndex]++; // just keeping track of how many meshes might be using thi could be useful someday
+				continue; // material is the same, just re-use it
 			}
 			else
 			{
@@ -34,7 +34,7 @@ void vk::Scene::AddModel(GLTFModel& GLTF, MaterialManager& materialManager)
 				assert(newIndex != -1);
 ;				materialManager.materials[newIndex].textures.resize(mesh.textures.size());
 				for (size_t i = 0; i < mesh.textures.size(); i++) {
-					VkFormat FORMAT = i == 0 ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM; // index 0 is albedo, the rest should use UNORM 
+					VkFormat FORMAT = i == 0 ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM; // index 0 is albedo, the rest should use UNORM
 					materialManager.materials[newIndex].textures[i] = (std::move(LoadTextureFromDisk(mesh.textures[i], context, FORMAT)));
 				}
 
@@ -48,7 +48,7 @@ void vk::Scene::AddModel(GLTFModel& GLTF, MaterialManager& materialManager)
 			materialManager.materials[mesh.materialIndex].textures.resize(mesh.textures.size());
 
 			for (size_t i = 0; i < mesh.textures.size(); i++) {
-				VkFormat FORMAT = i == 0 ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM; // index 0 is albedo, the rest should use UNORM 
+				VkFormat FORMAT = i == 0 ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM; // index 0 is albedo, the rest should use UNORM
 				materialManager.materials[mesh.materialIndex].textures[i] = (std::move(LoadTextureFromDisk(mesh.textures[i], context, FORMAT)));
 			}
 			materialManager.materials[mesh.materialIndex].isValid = true;
@@ -58,11 +58,12 @@ void vk::Scene::AddModel(GLTFModel& GLTF, MaterialManager& materialManager)
 
 	std::vector<Vertex> allVerts;
 	std::vector<uint32_t> allIndices;
-	std::vector<uint32_t> meshOffsets;
+	std::vector<glm::uvec2> meshOffsets;
+	std::vector<uint32_t> meshIDs;
 
 	uint32_t vertexOffset = 0;
 	uint32_t indexOffset = 0;
-
+	uint32_t currentMeshID = 0;
 	for (auto& mesh : GLTF.meshes)
 	{
 		VkDeviceSize vertexSize = sizeof(mesh.vertices[0]) * mesh.vertices.size();
@@ -70,21 +71,17 @@ void vk::Scene::AddModel(GLTFModel& GLTF, MaterialManager& materialManager)
 
 		VkDeviceSize indexSize = sizeof(mesh.indices[0]) * mesh.indices.size();
 		CreateAndUploadBuffer(context, mesh.indices.data(), indexSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, mesh.indexBuffer);
-		
-		meshOffsets.push_back(vertexOffset);
+
+		meshOffsets.push_back(glm::uvec2(indexOffset, vertexOffset));
 
 		allVerts.insert(allVerts.end(), mesh.vertices.begin(), mesh.vertices.end());
-
-		for (uint32_t idx : mesh.indices)
-		{
-			allIndices.push_back(idx + vertexOffset);
-		}
+		allIndices.insert(allIndices.end(), mesh.indices.begin(), mesh.indices.end());
 
 		vertexOffset += mesh.vertices.size();
 		indexOffset  += mesh.indices.size();
 	}
 
-	
+
 	// now create the large vertex, index + mesh offset buffers
 	VkDeviceSize vertSize = sizeof(allVerts[0]) * allVerts.size();
 	CreateAndUploadBuffer(context, allVerts.data(), vertSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, vertexBuffer);
@@ -103,15 +100,16 @@ void vk::Scene::AddModel(GLTFModel& GLTF, MaterialManager& materialManager)
 
 // Maybe do it for a single mesh for now ?
 void vk::Scene::CreateBLAS()
-{	
+{
 	const uint32_t numMeshes = gltfModels[0].meshes.size();
-	std::vector<VkAccelerationStructureGeometryKHR> geometries;
-	geometries.reserve(numMeshes);  
-	std::vector<uint32_t> primitiveCount;
-	primitiveCount.reserve(numMeshes);
+	//std::vector<VkAccelerationStructureGeometryKHR> geometries;
+	//geometries.reserve(numMeshes);
+	//std::vector<uint32_t> primitiveCount;
+	//primitiveCount.reserve(numMeshes);
 
 	std::vector<VkAccelerationStructureBuildRangeInfoKHR> buildInfos;
 	buildInfos.reserve(numMeshes);
+	BottomLevelAccelerationStructures.resize(numMeshes);
 
 	// First pass: collect all geometries and primitive counts
 	for (size_t i = 0; i < numMeshes; i++) {
@@ -121,11 +119,11 @@ void vk::Scene::CreateBLAS()
 		VkDeviceAddress indexBufferAddress = GetBufferDeviceAddress(context.device, mesh.indexBuffer.buffer);
 
 		const uint32_t numPrims = static_cast<uint32_t>(mesh.indices.size() / 3);
-		primitiveCount.push_back(numPrims);
+		//primitiveCount.push_back(numPrims);
 
 		VkAccelerationStructureGeometryTrianglesDataKHR triangles{
 			.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
-			.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT,
+			.vertexFormat = VK_FORMAT_R32G32B32A32_SFLOAT,
 			.vertexData = {.deviceAddress = vertexBufferAddress},
 			.vertexStride = sizeof(Vertex),
 			.maxVertex = static_cast<uint32_t>(mesh.vertices.size() - 1),
@@ -149,100 +147,99 @@ void vk::Scene::CreateBLAS()
 			.transformOffset = 0
 		};
 
-		geometries.push_back(geometry);
-		buildInfos.push_back(accelerationStructureBuildRangeInfo);
+		// Build geometry info for all meshes at once
+		VkAccelerationStructureBuildGeometryInfoKHR accelerationStructureBuildGeometryInfo{
+			.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
+			.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
+			.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR,
+			.geometryCount = static_cast<uint32_t>(1),
+			.pGeometries = &geometry
+		};
+
+		// Get size requirements for the entire BLAS
+		VkAccelerationStructureBuildSizesInfoKHR accelerationStructureBuildSizesInfo{
+			.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR
+		};
+
+		vkGetAccelerationStructureBuildSizesKHR(
+			context.device,
+			VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+			&accelerationStructureBuildGeometryInfo,
+			&numPrims,
+			&accelerationStructureBuildSizesInfo
+		);
+
+		printf("Acceleration structure size: %zu\n", size_t(accelerationStructureBuildSizesInfo.accelerationStructureSize));
+		printf("Build Scratch size: %zu\n", size_t(accelerationStructureBuildSizesInfo.buildScratchSize));
+
+		BottomLevelAccelerationStructures[i].buffer = std::make_unique<Buffer>(
+			CreateBuffer(
+				"BLASBuffer",
+				context,
+				accelerationStructureBuildSizesInfo.accelerationStructureSize,
+				VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+				VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT)
+		);
+
+		// Create acceleration structure
+		VkAccelerationStructureCreateInfoKHR accelerationStructureCreateInfo = {
+			.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,
+			.buffer = BottomLevelAccelerationStructures[i].buffer->buffer,
+			.size = accelerationStructureBuildSizesInfo.accelerationStructureSize,
+			.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR
+		};
+		vkCreateAccelerationStructureKHR(context.device, &accelerationStructureCreateInfo, nullptr, &BottomLevelAccelerationStructures[i].handle);
+
+
+		Buffer scratchBuffer = CreateBuffer(
+			"ScratchBuffer",
+			context,
+			accelerationStructureBuildSizesInfo.buildScratchSize,
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+			VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT
+		);
+
+		VkAccelerationStructureBuildGeometryInfoKHR accelerationBuildGeometryInfo = {
+			.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
+			.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
+			.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR,
+			.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR,
+			.dstAccelerationStructure = BottomLevelAccelerationStructures[i].handle,
+			.geometryCount = static_cast<uint32_t>(1),
+			.pGeometries = &geometry,
+			.scratchData = {.deviceAddress = GetBufferDeviceAddress(context.device, scratchBuffer.buffer)}
+		};
+
+
+		std::vector<VkAccelerationStructureBuildRangeInfoKHR*> accelerationBuildStructureInfos = {
+			&accelerationStructureBuildRangeInfo
+		};
+
+		ExecuteSingleTimeCommands(context, [&](VkCommandBuffer cmd)
+			{
+				vkCmdBuildAccelerationStructuresKHR(
+					cmd,
+					1,
+					&accelerationBuildGeometryInfo,
+					accelerationBuildStructureInfos.data());
+			}
+		);
+
+		scratchBuffer.Destroy(context.device);
+		//geometries.push_back(geometry);
+		//buildInfos.push_back(accelerationStructureBuildRangeInfo);
+
+		VkAccelerationStructureDeviceAddressInfoKHR accelerationDeviceAddressInfo = {
+			.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
+			.accelerationStructure = BottomLevelAccelerationStructures[i].handle
+		};
+
+
+		BottomLevelAccelerationStructures[i].deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(
+			context.device,
+			&accelerationDeviceAddressInfo
+		);
 	}
-
-	// Build geometry info for all meshes at once
-	VkAccelerationStructureBuildGeometryInfoKHR accelerationStructureBuildGeometryInfo{
-		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
-		.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
-		.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR,
-		.geometryCount = static_cast<uint32_t>(geometries.size()),
-		.pGeometries = geometries.data()
-	};
-
-	// Get size requirements for the entire BLAS
-	VkAccelerationStructureBuildSizesInfoKHR accelerationStructureBuildSizesInfo{
-		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR
-	};
-
-	vkGetAccelerationStructureBuildSizesKHR(
-		context.device,
-		VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
-		&accelerationStructureBuildGeometryInfo,
-		primitiveCount.data(),
-		&accelerationStructureBuildSizesInfo
-	);
-
-	printf("Acceleration structure size: %zu\n", size_t(accelerationStructureBuildSizesInfo.accelerationStructureSize));
-	printf("Build Scratch size: %zu\n", size_t(accelerationStructureBuildSizesInfo.buildScratchSize));
-
-	BottomLevelAccelerationStructure.buffer = std::make_unique<Buffer>(
-		CreateBuffer(
-			"BLASBuffer", 
-			context, 
-			accelerationStructureBuildSizesInfo.accelerationStructureSize, 
-			VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-			VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT)
-	);
-
-	// Create acceleration structure 
-	VkAccelerationStructureCreateInfoKHR accelerationStructureCreateInfo = {
-		.sType  = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,
-		.buffer = BottomLevelAccelerationStructure.buffer->buffer,
-		.size   = accelerationStructureBuildSizesInfo.accelerationStructureSize,
-		.type   = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR
-	};
-	vkCreateAccelerationStructureKHR(context.device, &accelerationStructureCreateInfo, nullptr, &BottomLevelAccelerationStructure.handle);
-
-
-	Buffer scratchBuffer = CreateBuffer(
-		"ScratchBuffer",
-		context,
-		accelerationStructureBuildSizesInfo.buildScratchSize,
-		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-		VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT
-	);
-
-	VkAccelerationStructureBuildGeometryInfoKHR accelerationBuildGeometryInfo = {
-		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
-		.type  = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
-		.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR,
-		.mode  = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR,
-		.dstAccelerationStructure = BottomLevelAccelerationStructure.handle,
-		.geometryCount = static_cast<uint32_t>(geometries.size()),
-		.pGeometries = geometries.data(),
-		.scratchData = {.deviceAddress = GetBufferDeviceAddress(context.device, scratchBuffer.buffer)}
-	};
-
-
-	std::vector<VkAccelerationStructureBuildRangeInfoKHR*> accelerationBuildStructureInfos = {
-		buildInfos.data()
-	};
-
-	ExecuteSingleTimeCommands(context, [&](VkCommandBuffer cmd)
-		{
-			vkCmdBuildAccelerationStructuresKHR(
-				cmd,
-				1,
-				&accelerationBuildGeometryInfo,
-				accelerationBuildStructureInfos.data());
-		}
-	);
-
-	scratchBuffer.Destroy(context.device);
-
-	VkAccelerationStructureDeviceAddressInfoKHR accelerationDeviceAddressInfo = {
-		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
-		.accelerationStructure = BottomLevelAccelerationStructure.handle
-	};
-
-
-	BottomLevelAccelerationStructure.deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(
-		context.device,
-		&accelerationDeviceAddressInfo
-	);
 }
 
 void vk::Scene::CreateTLAS()
@@ -250,31 +247,39 @@ void vk::Scene::CreateTLAS()
 	VkTransformMatrixKHR transform_matrix = {
 		1.0f, 0.0f, 0.0f, 0.0f,
 		0.0f, 1.0f, 0.0f, 0.0f,
-		0.0f, 0.0f, 1.0f, 0.0f 
+		0.0f, 0.0f, 1.0f, 0.0f
 	};
 
-	VkAccelerationStructureInstanceKHR accelerationStructureInstance = {
-		.transform = transform_matrix,
-		.instanceCustomIndex = 0,
-		.mask = 0xFF,
-		.instanceShaderBindingTableRecordOffset = 0,
-		.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR,
-		.accelerationStructureReference = BottomLevelAccelerationStructure.deviceAddress
-	};
+	std::vector<VkAccelerationStructureInstanceKHR> instances;
+
+	for (size_t i = 0; i < BottomLevelAccelerationStructures.size(); i++)
+	{
+		VkAccelerationStructureInstanceKHR accelerationStructureInstance = {
+			.transform = transform_matrix,
+			.instanceCustomIndex = static_cast<uint32_t>(i),
+			.mask = 0xFF,
+			.instanceShaderBindingTableRecordOffset = 0,
+			.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR,
+			.accelerationStructureReference = BottomLevelAccelerationStructures[i].deviceAddress
+		};
+
+		instances.push_back(accelerationStructureInstance);
+	}
+
 
 	std::unique_ptr<Buffer> instanceBuffer = std::make_unique<Buffer>(
 		CreateBuffer(
 			"InstanceBuffer",
 			context,
-			sizeof(VkAccelerationStructureInstanceKHR),
+			sizeof(VkAccelerationStructureInstanceKHR) * instances.size(),
 			VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 			VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
 		)
 	);
 
-	instanceBuffer->WriteToBuffer(&accelerationStructureInstance, sizeof(VkAccelerationStructureInstanceKHR));
+	instanceBuffer->WriteToBuffer(instances.data(), sizeof(VkAccelerationStructureInstanceKHR) * instances.size());
 
-	VkDeviceOrHostAddressConstKHR instanceDataDeviceAddress = 
+	VkDeviceOrHostAddressConstKHR instanceDataDeviceAddress =
 	{
 		.deviceAddress = GetBufferDeviceAddress(context.device, instanceBuffer->buffer)
 	};
@@ -293,8 +298,8 @@ void vk::Scene::CreateTLAS()
 	accelerationStructureBuildGeometryInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
 	accelerationStructureBuildGeometryInfo.geometryCount = 1;
 	accelerationStructureBuildGeometryInfo.pGeometries = &accelerationStructureGeometry;
-	
-	const uint32_t primitiveCount = 1;
+
+	const uint32_t primitiveCount = static_cast<uint32_t>(instances.size());
 
 	VkAccelerationStructureBuildSizesInfoKHR accelerationStructureBuildSizesInfo = {
 		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR
@@ -307,7 +312,7 @@ void vk::Scene::CreateTLAS()
 		&primitiveCount,
 		&accelerationStructureBuildSizesInfo
 	);
-	
+
 	TopLevelAccelerationStructure.buffer = std::make_unique<Buffer>(
 		CreateBuffer(
 			"TLASBuffer",
@@ -326,7 +331,7 @@ void vk::Scene::CreateTLAS()
 	};
 	vkCreateAccelerationStructureKHR(context.device, &accelerationStructureCreateInfo, nullptr, &TopLevelAccelerationStructure.handle);
 
-	// Binding 
+	// Binding
 	Buffer scratchBuffer = CreateBuffer(
 		"ScratchBuffer",
 		context,
@@ -349,7 +354,7 @@ void vk::Scene::CreateTLAS()
 
 	VkAccelerationStructureBuildRangeInfoKHR accelerationStructureBuildRangeInfo =
 	{
-		.primitiveCount = static_cast<uint32_t>(1), // num inst
+		.primitiveCount = static_cast<uint32_t>(instances.size()), // num inst
 		.primitiveOffset = 0,
 		.firstVertex = 0,
 		.transformOffset = 0
@@ -373,7 +378,7 @@ void vk::Scene::CreateTLAS()
 
 	VkAccelerationStructureDeviceAddressInfoKHR accelerationDeviceAddressInfo = {
 		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
-		.accelerationStructure = BottomLevelAccelerationStructure.handle
+		.accelerationStructure = TopLevelAccelerationStructure.handle
 	};
 
 	TopLevelAccelerationStructure.deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(
@@ -394,7 +399,7 @@ void vk::Scene::DrawGLTF(VkCommandBuffer cmd, VkPipelineLayout pipelineLayout)
 			MeshPushConstants pc = {};
 			pc.ModelMatrix = glm::mat4(1.0f);
 
-			// Doing this for now. Will update in the future 
+			// Doing this for now. Will update in the future
 			if (model.name.find("Sponza") != std::string::npos)
 			{
 				pc.ModelMatrix = glm::scale(pc.ModelMatrix, glm::vec3(0.005, 0.005, 0.005));
@@ -417,7 +422,7 @@ void vk::Scene::DrawGLTF(VkCommandBuffer cmd, VkPipelineLayout pipelineLayout)
 }
 
 
-// TODO: Sort and implement these 
+// TODO: Sort and implement these
 void vk::Scene::RenderFrontMeshes(VkCommandBuffer cmd, VkPipelineLayout pipelineLayout)
 {
 
@@ -442,7 +447,7 @@ void vk::Scene::Update(GLFWwindow* window)
 		light.LightSpaceMatrix = ortho * view;
 	}
 
-	// Fill GPU Data with data defined for the scene 
+	// Fill GPU Data with data defined for the scene
 	for (size_t i = 0; i < m_Lights.size(); i++)
 	{
 		m_LightBuffer.lights[i].type = static_cast<int>(m_Lights[i].Type);
@@ -451,13 +456,13 @@ void vk::Scene::Update(GLFWwindow* window)
 		m_LightBuffer.lights[i].LightSpaceMatrix = m_Lights[i].LightSpaceMatrix;
 	}
 
-	// Pass the light data to the GPU to update all light properties 
+	// Pass the light data to the GPU to update all light properties
 	m_LightUBO[currentFrame].WriteToBuffer(m_LightBuffer, sizeof(LightBuffer));
 }
 
 void vk::Scene::Destroy()
 {
-	// Destroy model resources for the GLTF resources loaded in 
+	// Destroy model resources for the GLTF resources loaded in
 	if (!gltfModels.empty())
 	{
 		for (auto& model : gltfModels)

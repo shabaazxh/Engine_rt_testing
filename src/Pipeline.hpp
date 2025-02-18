@@ -19,7 +19,7 @@ namespace vk {
     enum class PipelineType {
         GRAPHICS,
         COMPUTE,
-        RAY
+        RAYTRACING
     };
 
     enum class ShaderType
@@ -131,7 +131,7 @@ namespace vk {
                     m_pipelineLayout.pushConstantRangeCount = 0;
                     m_pipelineLayout.pPushConstantRanges = nullptr;
                 }
-                
+
 
                 return *this;
             }
@@ -185,6 +185,26 @@ namespace vk {
             // Set the render pass (only for graphics pipelines)
             PipelineBuilder& SetRenderPass(VkRenderPass renderPass) {
                 this->renderPass = renderPass;
+
+                return *this;
+            }
+
+            PipelineBuilder& CreateShaderGroup(
+                VkRayTracingShaderGroupTypeKHR type,
+                int generalShader = VK_SHADER_UNUSED_KHR,
+                int closestHitShader = VK_SHADER_UNUSED_KHR,
+                int anyHitShader = VK_SHADER_UNUSED_KHR,
+                int intersectionShader = VK_SHADER_UNUSED_KHR)
+            {
+                VkRayTracingShaderGroupCreateInfoKHR group{};
+                group.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+                group.type = type;
+                group.generalShader = generalShader;
+                group.closestHitShader = closestHitShader;
+                group.anyHitShader = anyHitShader;
+                group.intersectionShader = intersectionShader;
+
+                shaderGroups.push_back(group);
 
                 return *this;
             }
@@ -263,35 +283,35 @@ namespace vk {
                     shaderStages.push_back(shaderStageInfo);
                 }
 
-                // Ray gen groups 
-                VkRayTracingShaderGroupCreateInfoKHR rayGenGroup = {};
-                rayGenGroup.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
-                rayGenGroup.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-                rayGenGroup.generalShader = 0;
-                rayGenGroup.closestHitShader = VK_SHADER_UNUSED_KHR;
-                rayGenGroup.anyHitShader = VK_SHADER_UNUSED_KHR;
-                rayGenGroup.intersectionShader = VK_SHADER_UNUSED_KHR;
-                shaderGroups.push_back(rayGenGroup);
+                // Ray gen groups
+                //VkRayTracingShaderGroupCreateInfoKHR rayGenGroup = {};
+                //rayGenGroup.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+                //rayGenGroup.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+                //rayGenGroup.generalShader = 0;
+                //rayGenGroup.closestHitShader = VK_SHADER_UNUSED_KHR;
+                //rayGenGroup.anyHitShader = VK_SHADER_UNUSED_KHR;
+                //rayGenGroup.intersectionShader = VK_SHADER_UNUSED_KHR;
+                //shaderGroups.push_back(rayGenGroup);
 
-                // Ray miss group
-                VkRayTracingShaderGroupCreateInfoKHR missGroup = {};
-                missGroup.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
-                missGroup.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-                missGroup.generalShader = 1;
-                missGroup.closestHitShader = VK_SHADER_UNUSED_KHR;
-                missGroup.anyHitShader = VK_SHADER_UNUSED_KHR;
-                missGroup.intersectionShader = VK_SHADER_UNUSED_KHR;
-                shaderGroups.push_back(missGroup);
+                //// Ray miss group
+                //VkRayTracingShaderGroupCreateInfoKHR missGroup = {};
+                //missGroup.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+                //missGroup.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+                //missGroup.generalShader = 1;
+                //missGroup.closestHitShader = VK_SHADER_UNUSED_KHR;
+                //missGroup.anyHitShader = VK_SHADER_UNUSED_KHR;
+                //missGroup.intersectionShader = VK_SHADER_UNUSED_KHR;
+                //shaderGroups.push_back(missGroup);
 
-                // Ray closes hit group 
-                VkRayTracingShaderGroupCreateInfoKHR chGroup = {};
-                chGroup.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
-                chGroup.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
-                chGroup.generalShader = VK_SHADER_UNUSED_KHR;
-                chGroup.closestHitShader = 2;
-                chGroup.anyHitShader = VK_SHADER_UNUSED_KHR;
-                chGroup.intersectionShader = VK_SHADER_UNUSED_KHR;
-                shaderGroups.push_back(chGroup);
+                //// Ray closes hit group
+                //VkRayTracingShaderGroupCreateInfoKHR chGroup = {};
+                //chGroup.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+                //chGroup.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
+                //chGroup.generalShader = VK_SHADER_UNUSED_KHR;
+                //chGroup.closestHitShader = 2;
+                //chGroup.anyHitShader = VK_SHADER_UNUSED_KHR;
+                //chGroup.intersectionShader = VK_SHADER_UNUSED_KHR;
+                //shaderGroups.push_back(chGroup);
 
                 VkResult res = vkCreatePipelineLayout(context.device, &m_pipelineLayout, nullptr, &pipelineLayout);
 
@@ -310,17 +330,17 @@ namespace vk {
                 if (!vkCreateRayTracingPipelinesKHR) {
                     std::cerr << "Failed to load vkCreateRayTracingPipelinesKHR!" << std::endl;
                 }
-                
+
                 VkPipeline pipeline;
-                    
+
                 VK_CHECK(
                     vkCreateRayTracingPipelinesKHR(
                         context.device,
                         VK_NULL_HANDLE,
                         VK_NULL_HANDLE,
                         1,
-                        &rtPipeline, 
-                        nullptr, 
+                        &rtPipeline,
+                        nullptr,
                         &pipeline
                     )
                 , "Failed to create ray tracing pipeline.");
@@ -348,7 +368,7 @@ namespace vk {
 
                 VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
                 vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        
+
                 auto bindingDescription = Vertex::GetBindingDescription();
                 auto attributeDescription = Vertex::GetAttributeDescriptions();
 
@@ -361,8 +381,8 @@ namespace vk {
                 }
                 else
                 {
-                    vertexInputInfo.vertexBindingDescriptionCount = 0; 
-                    vertexInputInfo.vertexAttributeDescriptionCount = 0; 
+                    vertexInputInfo.vertexBindingDescriptionCount = 0;
+                    vertexInputInfo.vertexAttributeDescriptionCount = 0;
                     vertexInputInfo.pVertexAttributeDescriptions = nullptr;
                     vertexInputInfo.pVertexBindingDescriptions = nullptr;
                 }
@@ -411,7 +431,7 @@ namespace vk {
             // Create a compute pipeline
             VkPipeline CreateComputePipeline() {
                 // Compute pipeline requires only a compute shader which should be the first shader provided
-                
+
                 VkPipelineShaderStageCreateInfo computeShaderStageInfo{};
                 computeShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
                 computeShaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;

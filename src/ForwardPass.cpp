@@ -8,12 +8,12 @@
 #include "Camera.hpp"
 
 vk::ForwardPass::ForwardPass(Context& context, Image& shadowMap, Image& depthPrepass, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera) :
-	context{ context }, 
-	shadowMap{ shadowMap }, 
+	context{ context },
+	shadowMap{ shadowMap },
 	depthPrepass{ depthPrepass },
-	scene {scene}, 
+	scene {scene},
 	camera{ camera }
-{	
+{
 	m_RenderTarget = CreateImageTexture2D(
 		"ForwardPassRT",
 		context,
@@ -60,7 +60,7 @@ vk::ForwardPass::~ForwardPass()
 	m_BrightnessTexture.Destroy(context.device);
 
 	for (auto& pair : m_pipelines)
-	{	
+	{
 		vkDestroyPipeline(context.device, pair.second.first, nullptr);
 		vkDestroyPipelineLayout(context.device, pair.second.second, nullptr);
 	}
@@ -131,7 +131,7 @@ void vk::ForwardPass::Resize()
 }
 
 void vk::ForwardPass::Execute(VkCommandBuffer cmd)
-{		
+{
 #ifdef _DEBUG
 	RenderPassLabel(cmd, "ForwardPass");
 #endif // !DEBUG
@@ -143,7 +143,7 @@ void vk::ForwardPass::Execute(VkCommandBuffer cmd)
 	beginInfo.renderArea.extent = context.extent;
 
 	VkClearValue clearValues[3];
-	clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
+	clearValues[0].color = { {0.0f, 0.0f, 0.2f, 1.0f} };
 	clearValues[1].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
 	clearValues[2].depthStencil = { 1.0f, 0 };
 	beginInfo.clearValueCount = 3;
@@ -166,7 +166,7 @@ void vk::ForwardPass::Execute(VkCommandBuffer cmd)
 	vkCmdBeginRenderPass(cmd, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelines[setRenderingPipeline].first);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelines[setRenderingPipeline].second, 0, 1, &m_descriptorSets[currentFrame], 0, nullptr);
-	
+
 	scene->DrawGLTF(cmd, m_pipelines[setRenderingPipeline].second);
 
 	vkCmdEndRenderPass(cmd);
@@ -186,7 +186,7 @@ void vk::ForwardPass::CreatePipeline()
 
 	// Default pipeline
 	// .first  = VkPipeline
-	// .second = VkPipelineLayout 
+	// .second = VkPipelineLayout
 	auto defaultPipelineResult = vk::PipelineBuilder(context, PipelineType::GRAPHICS, VertexBinding::BIND, 0)
 		.AddShader("assets/shaders/default.vert.spv", ShaderType::VERTEX)
 		.AddShader("assets/shaders/default.frag.spv", ShaderType::FRAGMENT)
@@ -231,29 +231,29 @@ void vk::ForwardPass::CreateRenderPass()
 		.SetDepthAttachmentRef(0, 2, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
 		.AddColorAttachmentRef(0, 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
 		.AddColorAttachmentRef(0, 1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
-		// External -> 0 : Color 
+		// External -> 0 : Color
 		.AddDependency(VK_SUBPASS_EXTERNAL, 0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_DEPENDENCY_BY_REGION_BIT)
 
-		// 0 -> External : Color : Wait for color writing to finish on the attachment before the fragment shader tries to read from it 
+		// 0 -> External : Color : Wait for color writing to finish on the attachment before the fragment shader tries to read from it
 		.AddDependency(0, VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT, VK_DEPENDENCY_BY_REGION_BIT)
 
-	
+
 		// External -> 0 : Depth
-		// Wait for the depth-prepass to finish writing to the depth attachment before this pass uses it for depth comparison 
+		// Wait for the depth-prepass to finish writing to the depth attachment before this pass uses it for depth comparison
 		//.AddDependency(
-		//	VK_SUBPASS_EXTERNAL, 0, 
-		//	VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, 
-		//	VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, 
-		//	VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, 
+		//	VK_SUBPASS_EXTERNAL, 0,
+		//	VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+		//	VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+		//	VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
 		//	VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT)
-		
-		
+
+
 		// 0 -> External : Depth
 		// Wait for this pass to finish reading from the depth attachment to occlude fragments before the depth-prepass writes to it
-		//.AddDependency(0, VK_SUBPASS_EXTERNAL, 
-		//	VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, 
-		//	VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT, 
-		//	VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, 
+		//.AddDependency(0, VK_SUBPASS_EXTERNAL,
+		//	VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+		//	VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+		//	VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
 		//	VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)
 
 		// External -> 0 : Depth
@@ -284,7 +284,7 @@ void vk::ForwardPass::CreateFramebuffer()
 void vk::ForwardPass::BuildDescriptors()
 {
 	m_descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
-	
+
 	std::vector<VkDescriptorSetLayoutBinding> bindings = {
 		CreateDescriptorBinding(0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT), // SceneUBO (projection, view etc..)
 		CreateDescriptorBinding(1, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT), // Light UBO
@@ -294,7 +294,7 @@ void vk::ForwardPass::BuildDescriptors()
 	meshDescriptorSetLayout = CreateDescriptorSetLayout(context, bindings);
 
 	AllocateDescriptorSets(context, context.descriptorPool, meshDescriptorSetLayout, MAX_FRAMES_IN_FLIGHT, m_descriptorSets);
-	
+
 
 	// Camera Transform UBO
 	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)

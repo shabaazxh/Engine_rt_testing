@@ -30,11 +30,11 @@ namespace vk
 		Scene(Context& context, MaterialManager& materialManager);
 		void AddModel(GLTFModel& GLTF, MaterialManager& materialManager);
 
-		// TODO: Sort and implement these 
+		// TODO: Sort and implement these
 		void RenderFrontMeshes(VkCommandBuffer cmd, VkPipelineLayout pipelineLayout);
 		void RenderBackMeshes(VkCommandBuffer cmd, VkPipelineLayout pipelineLayout);
 
-		void DrawGLTF(VkCommandBuffer cmd, VkPipelineLayout pipelineLayout); // Does it make sense for this to take VkPipeline? 
+		void DrawGLTF(VkCommandBuffer cmd, VkPipelineLayout pipelineLayout); // Does it make sense for this to take VkPipeline?
 		void AddLightSource(Light& LightSource);
 		void Update(GLFWwindow* window);
 
@@ -45,7 +45,7 @@ namespace vk
 
 		void CreateBLAS();
 		void CreateTLAS();
-		AccelerationStructure BottomLevelAccelerationStructure;
+		std::vector<AccelerationStructure> BottomLevelAccelerationStructures;
 		AccelerationStructure TopLevelAccelerationStructure;
 		std::vector<GLTFModel> gltfModels;
 

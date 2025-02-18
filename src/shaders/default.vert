@@ -20,10 +20,10 @@ layout(push_constant) uniform Push
 	float Roughness;
 }pc;
 
-layout(location = 0) in vec3 pos;
-layout(location = 1) in vec2 tex;
-layout(location = 2) in vec3 normal;
-layout(location = 3) in uvec3 compressedTBN;
+layout(location = 0) in vec4 pos;
+layout(location = 1) in vec4 normal;
+layout(location = 2) in vec2 tex;
+//layout(location = 3) in uvec3 compressedTBN;
 
 layout(location = 0) out vec4 WorldPos;
 layout(location = 1) out vec2 uv;
@@ -38,7 +38,7 @@ float unpack8bitToFloat(uint value)
 }
 
 vec4 unpackQuaternion(uvec3 packed) {
-    
+
     vec3 quat = vec3(
         unpack8bitToFloat(packed.x),
         unpack8bitToFloat(packed.y),
@@ -48,11 +48,11 @@ vec4 unpackQuaternion(uvec3 packed) {
     return vec4(quat, w);
 }
 
-// Reference: 
+// Reference:
 // Can reduce instructions by not reconstructing normal
 // We already the world normal available to us in the shader
 mat3 QuatToMat3(vec4 q) {
-    
+
     float x = q.x;
     float y = q.y;
     float z = q.z;
@@ -82,20 +82,20 @@ mat3 QuatToMat3(vec4 q) {
 
 void main()
 {
-	vec4 quaternion = normalize(unpackQuaternion(compressedTBN));
-	mat3 tbnMatrix = QuatToMat3(quaternion);
+	//vec4 quaternion = normalize(unpackQuaternion(compressedTBN));
+	//mat3 tbnMatrix = QuatToMat3(quaternion);
 
-	WorldNormal = normalize(pc.ModelMatrix * vec4(normal, 0.0));
+	WorldNormal = normalize(pc.ModelMatrix * vec4(normal.xyz, 0.0));
 
-    vec3 T = normalize((pc.ModelMatrix * vec4(tbnMatrix[0], 0.0)).xyz);
-    vec3 B = normalize((pc.ModelMatrix * vec4(tbnMatrix[1], 0.0)).xyz);
-    
+    //vec3 T = normalize((pc.ModelMatrix * vec4(tbnMatrix[0], 0.0)).xyz);
+    //vec3 B = normalize((pc.ModelMatrix * vec4(tbnMatrix[1], 0.0)).xyz);
+
     // Reference: Tangent Frame Transformation with Dual-Quaternion (Slide 23)
-    B *= sign(quaternion.w); // handededness 
+    //B *= sign(quaternion.w); // handededness
 
-    TBN = mat3(T, B, WorldNormal); 
+    //TBN = mat3(T, B, WorldNormal);
 
 	uv = tex;
-	WorldPos = pc.ModelMatrix * vec4(pos, 1.0);
-	gl_Position = ubo.projection * ubo.view * pc.ModelMatrix * vec4(pos, 1.0);
+	WorldPos = pc.ModelMatrix * vec4(pos.xyz, 1.0);
+	gl_Position = ubo.projection * ubo.view * pc.ModelMatrix * vec4(pos.xyz, 1.0);
 }
