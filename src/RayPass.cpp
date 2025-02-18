@@ -132,7 +132,7 @@ void vk::RayPass::Execute(VkCommandBuffer cmd)
 		VkStridedDeviceAddressRegionKHR miss_shader_sbt_entry{};
 		miss_shader_sbt_entry.deviceAddress = GetBufferDeviceAddress(context.device, MissShaderBindingTable->buffer);
 		miss_shader_sbt_entry.stride = handle_size_aligned;
-		miss_shader_sbt_entry.size = handle_size_aligned;
+		miss_shader_sbt_entry.size = handle_size_aligned * 2;
 
 		VkStridedDeviceAddressRegionKHR hit_shader_sbt_entry{};
 		hit_shader_sbt_entry.deviceAddress = GetBufferDeviceAddress(context.device, HitShaderBindingTable->buffer);
@@ -143,7 +143,7 @@ void vk::RayPass::Execute(VkCommandBuffer cmd)
 
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, m_Pipeline);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, m_PipelineLayout, 0, 1, &m_descriptorSets[currentFrame], 0, nullptr);
-	vkCmdTraceRaysKHR(cmd, &raygen_shader_sbt_entry, &miss_shader_sbt_entry, &hit_shader_sbt_entry, &callable_shader_sbt_entry, context.extent.width, context.extent.height, 1);
+	vkCmdTraceRaysKHR(cmd, &raygen_shader_sbt_entry, &miss_shader_sbt_entry, &hit_shader_sbt_entry, &callable_shader_sbt_entry, context.extent.width, context.extent.height, 2);
 
 	ImageTransition(
 		cmd,
@@ -171,10 +171,12 @@ void vk::RayPass::CreatePipeline()
 	auto pipelineResult = vk::PipelineBuilder(context, PipelineType::RAYTRACING, VertexBinding::NONE, 0)
 		.AddShader("assets/shaders/raygen.rgen.spv", ShaderType::RAYGEN)
 		.AddShader("assets/shaders/miss.rmiss.spv", ShaderType::MISS)
+		.AddShader("assets/shaders/shadowmiss.rmiss.spv", ShaderType::MISS)
 		.AddShader("assets/shaders/closesthit.rchit.spv", ShaderType::HIT)
 		.CreateShaderGroup(VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR, 0) // raygen
 		.CreateShaderGroup(VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR, 1) // miss
-		.CreateShaderGroup(VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR, VK_SHADER_UNUSED_KHR, 2)
+		.CreateShaderGroup(VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR, 2) // shadow-miss
+		.CreateShaderGroup(VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR, VK_SHADER_UNUSED_KHR, 3) // regular hit
 		.SetPipelineLayout({ {m_descriptorSetLayout} })
 		.Build();
 
@@ -197,7 +199,7 @@ void vk::RayPass::CreateShaderBindingTable()
 	const uint32_t           handle_size = rayTracingPipelineProperties.shaderGroupHandleSize;
 	const uint32_t           handle_size_aligned = aligned_size(rayTracingPipelineProperties.shaderGroupHandleSize, rayTracingPipelineProperties.shaderGroupHandleAlignment);
 	const uint32_t           handle_alignment = rayTracingPipelineProperties.shaderGroupHandleAlignment;
-	const uint32_t           group_count = static_cast<uint32_t>(3);
+	const uint32_t           group_count = static_cast<uint32_t>(4);
 	const uint32_t           sbt_size = group_count * handle_size_aligned;
 	const VkBufferUsageFlags sbt_buffer_usage_flags = VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 	const VmaMemoryUsage     sbt_memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
@@ -206,7 +208,7 @@ void vk::RayPass::CreateShaderBindingTable()
 		CreateBuffer(
 			"RayGenShaderBindingTable",
 			context,
-			handle_size,
+			handle_size_aligned,
 			sbt_buffer_usage_flags,
 			VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
 		)
@@ -216,7 +218,7 @@ void vk::RayPass::CreateShaderBindingTable()
 		CreateBuffer(
 			"MissShaderBindingTable",
 			context,
-			handle_size,
+			handle_size_aligned * 2,
 			sbt_buffer_usage_flags,
 			VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
 		)
@@ -226,7 +228,7 @@ void vk::RayPass::CreateShaderBindingTable()
 		CreateBuffer(
 			"HitShaderBindingTable",
 			context,
-			handle_size,
+			handle_size_aligned,
 			sbt_buffer_usage_flags,
 			VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
 		)
@@ -236,9 +238,9 @@ void vk::RayPass::CreateShaderBindingTable()
 	std::vector<uint8_t> shaderHandleStorage(sbt_size);
 	VK_CHECK(vkGetRayTracingShaderGroupHandlesKHR(context.device, m_Pipeline, 0, group_count, sbt_size, shaderHandleStorage.data()), "Failed to get shader group handles");
 
-	RayGenShaderBindingTable->WriteToBuffer(shaderHandleStorage.data(), handle_size);
-	MissShaderBindingTable->WriteToBuffer(shaderHandleStorage.data() + handle_size_aligned, handle_size);
-	HitShaderBindingTable->WriteToBuffer(shaderHandleStorage.data() + handle_size_aligned * 2, handle_size);
+	RayGenShaderBindingTable->WriteToBuffer(shaderHandleStorage.data(), handle_size_aligned);
+	MissShaderBindingTable->WriteToBuffer(shaderHandleStorage.data() + handle_size_aligned, handle_size_aligned * 2);
+	HitShaderBindingTable->WriteToBuffer(shaderHandleStorage.data() + handle_size_aligned * 3, handle_size_aligned);
 }
 
 void vk::RayPass::BuildDescriptors()
@@ -247,7 +249,7 @@ void vk::RayPass::BuildDescriptors()
 	{
 		// Set = 0, binding 0 = cameraUBO, binding = 1 = textures
 		std::vector<VkDescriptorSetLayoutBinding> bindings = {
-			CreateDescriptorBinding(0, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_RAYGEN_BIT_KHR),
+			CreateDescriptorBinding(0, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
 			CreateDescriptorBinding(1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR),
 			CreateDescriptorBinding(2, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
 			CreateDescriptorBinding(3, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),

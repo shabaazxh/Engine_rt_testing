@@ -5,6 +5,8 @@
 layout(location = 0) rayPayloadInEXT vec3 hitValue;
 hitAttributeEXT vec3 attribs;
 
+layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
+
 // Large buffers containing all mesh data
 struct VertexData {
     vec4 position;
@@ -39,6 +41,11 @@ layout(set = 0, binding = 2) uniform SceneUniform
 	float farPlane;
 } ubo;
 
+
+// Shadow ray payload (only needs a boolean to check occlusion)
+layout(location = 1) rayPayloadEXT bool isShadowed;
+
+
 void main()
 {
 	const int primitiveID = gl_PrimitiveID;
@@ -71,14 +78,40 @@ void main()
 	//worldNormal = -worldNormal;
 
 	float lightIntesity = 1.0;
-	float lightDistance = 10000.0;
-	vec3 lightpos = vec3(1.0, 100.0, 1.0);
-	vec3 L = normalize(lightpos);
+	vec3 lightpos = vec3(1.0, 2000.0, 1.0);
+	vec3 L = normalize(lightpos - worldPos);  // Corrected light direction
 	float diff = max(dot(worldNormal, L), 0.0);
-	vec3 diffuse = diff * vec3(1,1,1) * lightIntesity;
 
-	const vec3 rayDirection = gl_WorldRayDirectionEXT;
-	//worldNormal      = faceforward(worldNormal, rayDirection, worldNormal);
+	// Shadow Ray Setup
+	vec3 shadowOrigin = worldPos + worldNormal * 0.001;  // Offset to prevent self-shadowing
+	vec3 shadowDirection = normalize(lightpos - shadowOrigin);
+	float lightDistance = length(lightpos - shadowOrigin);
 
-	hitValue = (vec3(0.02) + diffuse);
+	float att = 1.0;
+	if(dot(worldNormal, L) > 0) {
+
+		// trace shadow ray
+		isShadowed = true;
+		traceRayEXT(
+			topLevelAS,
+			gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT, // Terminate on first hit
+			0xFF,
+			1,
+			0,
+			1,
+			shadowOrigin,
+			0.001,
+			shadowDirection,
+			lightDistance - 0.001,
+			1
+		);
+	}
+
+	// If shadowed, reduce lighting
+	if (isShadowed) {
+		att = 0.3;
+	}
+
+	// Final lighting calculation
+	hitValue = (lightIntesity * (att) * (diff * vec3(1,1,1)));
 }
