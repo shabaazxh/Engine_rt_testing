@@ -117,6 +117,7 @@ void vk::Renderer::Destroy()
 	m_PresentPass.reset();
 	m_camera.reset();
 	m_scene->Destroy();
+	m_RayPass.reset();
 
 	vkDestroySampler(context.device, repeatSamplerAniso, nullptr);
 	vkDestroySampler(context.device, repeatSampler, nullptr);
@@ -242,6 +243,7 @@ void vk::Renderer::Render()
 	{
 		// Recreate swapchain
 		context.RecreateSwapchain();
+		m_RayPass->Resize();
 		m_DepthPrepass->Resize();
 		m_ShadowMap->Resize();
 		m_ForwardPass->Resize();
@@ -323,6 +325,7 @@ void vk::Renderer::Present(uint32_t imageIndex)
 	{
 		// Recreate the swapchain
 		context.RecreateSwapchain();
+		m_RayPass->Resize();
 		m_DepthPrepass->Resize();
 		m_ShadowMap->Resize();
 		m_ForwardPass->Resize();

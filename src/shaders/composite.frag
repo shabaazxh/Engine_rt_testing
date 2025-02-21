@@ -9,7 +9,7 @@ layout(set = 0, binding = 1) uniform sampler2D bloomPass;
 
 // Combine the deferred lighting pass and the bloom pass to produce the final output image
 void main()
-{	
+{
 	vec4 lighting = texture(renderedScene, uv);
 	vec4 bloom = texture(bloomPass, uv);
 

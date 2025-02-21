@@ -45,6 +45,83 @@ layout(set = 0, binding = 2) uniform SceneUniform
 // Shadow ray payload (only needs a boolean to check occlusion)
 layout(location = 1) rayPayloadEXT bool isShadowed;
 
+float random (vec2 st)
+{
+	return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+}
+
+// Simple hash function to generate a pseudo-random float in [0, 1]
+float hash(vec3 p, float seed) {
+    return fract(sin(dot(p + seed, vec3(12.9898, 78.233, 45.5432))) * 43758.5453);
+}
+
+
+
+float UintToFloat(uint x)
+{
+	return float();
+}
+
+// Generate a random direction in a hemisphere around the normal
+vec3 randomHemisphereDirection(vec3 n, vec3 pos, float seed) {
+    // Use hit position as a base for randomness
+    float r1 = hash(pos, seed);
+    float r2 = hash(pos + vec3(1.0, 2.0, 3.0), seed); // Offset to get a different value
+
+    // Uniformly sample a direction in a hemisphere
+    float theta = 2.0 * 3.14159265359 * r1; // Azimuth angle
+    float phi = acos(1.0 - 2.0 * r2);       // Polar angle adjusted for hemisphere
+
+    // Convert to Cartesian coordinates
+    float x = sin(phi) * cos(theta);
+    float y = sin(phi) * sin(theta);
+    float z = cos(phi);
+
+    vec3 dir = vec3(x, y, z);
+
+    // Align with normal (create a basis and transform)
+    vec3 up = abs(n.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+    vec3 tangent = normalize(cross(up, n));
+    vec3 bitangent = cross(n, tangent);
+
+    return tangent * dir.x + bitangent * dir.y + n * dir.z;
+}
+
+// Ambient Occlusion function for closest hit shader
+float ao(vec3 pos, vec3 n, int samples) {
+    float a = 0.0;
+
+    for (int i = 0; i < samples; i++) {
+        // Use sample index as a seed for variation
+        float seed = float(i);
+
+        // Generate random direction in hemisphere
+        vec3 dir = randomHemisphereDirection(n, pos, seed);
+		isShadowed = true;
+        // Trace ray (assuming a trace function exists)
+        // Replace with your actual ray-tracing call
+        traceRayEXT(
+			topLevelAS,
+			gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT, // Terminate on first hit
+			0xFF,
+			1, // perhaps this means index 1 for when miss shaders begin
+			0,
+			1, // perhaps this means index 1 within the miss collection we have
+			pos,
+			0.001,
+			dir,
+			10000,
+			1
+		);
+
+		a += isShadowed == true ? 1.0 :0.0;
+
+        // Accumulate occlusion (0 = occluded, 1 = unoccluded)
+    }
+
+    // Average the occlusion and invert for AO
+    return 1.0 - (a / float(samples));
+}
 
 void main()
 {
@@ -77,8 +154,8 @@ void main()
 	vec3 worldNormal = normalize(vec3(objectNormal * gl_WorldToObjectEXT).xyz);
 	//worldNormal = -worldNormal;
 
-	float lightIntesity = 1.0;
-	vec3 lightpos = vec3(1.0, 2000.0, 1.0);
+	float lightIntesity = 100.0;
+	vec3 lightpos = vec3(300.0, 2000.0, 1.0);
 	vec3 L = normalize(lightpos - worldPos);  // Corrected light direction
 	float diff = max(dot(worldNormal, L), 0.0);
 
@@ -96,9 +173,9 @@ void main()
 			topLevelAS,
 			gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT, // Terminate on first hit
 			0xFF,
-			1,
+			1, // perhaps this means index 1 for when miss shaders begin
 			0,
-			1,
+			1, // perhaps this means index 1 within the miss collection we have
 			shadowOrigin,
 			0.001,
 			shadowDirection,
@@ -109,9 +186,28 @@ void main()
 
 	// If shadowed, reduce lighting
 	if (isShadowed) {
-		att = 0.3;
+		att = 0.1;
 	}
 
+	// check for reflections here?
+
+	vec3 reflectionOrigin = worldPos;
+	vec3 reflectionDirection = reflect(gl_WorldRayDirectionEXT, worldNormal);
+	float a = ao(worldPos, worldNormal, 4);
+//	traceRayEXT(
+//		topLevelAS,
+//		gl_RayFlagsNoneEXT,
+//		0xFF,
+//		0,
+//		0,
+//		0,
+//		reflectionOrigin,
+//		0.1,
+//		reflectionDirection,
+//		100000.0,
+//		0
+//	);
+
 	// Final lighting calculation
-	hitValue = (lightIntesity * (att) * (diff * vec3(1,1,1)));
+	hitValue = vec3(a,a,a);
 }
