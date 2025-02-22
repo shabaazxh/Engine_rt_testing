@@ -105,6 +105,11 @@ namespace vk
 	private:
 		Context& context;
 	};
+
+	struct MaterialRT
+	{
+		uint32_t albedoIndex;
+	};
 //
 //	struct MaterialHasher
 //	{

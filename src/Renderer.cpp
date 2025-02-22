@@ -102,7 +102,7 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	m_DepthPrepass  = std::make_unique<DepthPrepass>(context, m_scene, m_camera);
 	m_ForwardPass   = std::make_unique<ForwardPass>(context, m_ShadowMap->GetRenderTarget(), m_DepthPrepass->GetRenderTarget(), m_scene, m_camera);
 	m_RayPass		= std::make_unique<RayPass>(context, m_scene, m_camera);
-	m_CompositePass = std::make_unique<Composite>(context, m_ForwardPass->GetRenderTarget(), m_ForwardPass->GetRenderTarget());
+	m_CompositePass = std::make_unique<Composite>(context, m_RayPass->GetRenderTarget(), m_ForwardPass->GetRenderTarget());
 	m_PresentPass   = std::make_unique<PresentPass>(context, m_CompositePass->GetRenderTarget());
 }
 

@@ -507,9 +507,15 @@ void vk::Context::CreateLogicalDevice()
         .scalarBlockLayout = VK_TRUE
     };
 
+    VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures =
+    {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT,
+        .pNext = &scalarBlockFeatures
+    };
+
     VkPhysicalDeviceFeatures2 deviceFeatures2{};
     deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-    deviceFeatures2.pNext = &scalarBlockFeatures;
+    deviceFeatures2.pNext = &indexingFeatures;
     deviceFeatures2.features.samplerAnisotropy = VK_TRUE;
 
     VkDeviceCreateInfo deviceInfo = {};
@@ -809,6 +815,7 @@ void vk::Context::CreateDescriptorPool()
     info.poolSizeCount = static_cast<uint32_t>(poolSize.size());
     info.pPoolSizes = poolSize.data();
     info.maxSets = 1536;
+    info.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
 
     VK_CHECK(vkCreateDescriptorPool(device, &info, nullptr, &descriptorPool), "Failed to create descriptor pool");
 }

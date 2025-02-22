@@ -14,6 +14,10 @@ struct VertexData {
 	vec2 texcoords;
 };
 
+struct Material{
+	uint albedoIndex;
+};
+
 layout(set = 0, binding = 3, scalar) readonly buffer VertexBuffer {
 
     VertexData vertices[];
@@ -28,6 +32,12 @@ layout(set = 0, binding = 4, scalar) readonly buffer IndexBuffer {
 layout(set = 0, binding = 5, scalar) readonly buffer OffsetBuffer {
     uvec2 offsets[];
 };
+
+layout(set = 0, binding = 6, scalar) readonly buffer MaterialBuffer {
+	Material materials[];
+};
+
+layout(set = 0, binding = 7) uniform sampler2D textures[300];
 
 layout(set = 0, binding = 2) uniform SceneUniform
 {
@@ -221,6 +231,9 @@ void main()
 	const uint indexOffset = offsets[meshID].x;
 	const uint vertexOffset = offsets[meshID].y;
 
+	Material material = materials[meshID];
+
+
 	const uint i0 = indices[indexOffset + 3 * primitiveID + 0] + vertexOffset;
 	const uint i1 = indices[indexOffset + 3 * primitiveID + 1] + vertexOffset;
 	const uint i2 = indices[indexOffset + 3 * primitiveID + 2] + vertexOffset;
@@ -229,7 +242,16 @@ void main()
 	const vec3 v1 = vertices[i1].position.xyz;
 	const vec3 v2 = vertices[i2].position.xyz;
 
+	const vec2 uv0 = vertices[i0].texcoords;
+	const vec2 uv1 = vertices[i1].texcoords;
+	const vec2 uv2 = vertices[i2].texcoords;
+
+	// Interpolating the texture coordinates using barycentric coordinates
 	const vec3 barycentrics = vec3(1.0 - attribs.x - attribs.y, attribs.x, attribs.y);
+	vec2 interpolatedUV = barycentrics.x * uv0 + barycentrics.y * uv1 + barycentrics.z * uv2;
+
+	// Sample texture using interpolated UVs
+	vec3 albedo = texture(textures[material.albedoIndex], interpolatedUV).rgb;
 
 	vec3 pos = v0 * barycentrics.x + v1 * barycentrics.y + v2 * barycentrics.z;
 	const vec3 worldPos = vec3(gl_ObjectToWorldEXT * vec4(pos, 1.0));
@@ -303,5 +325,6 @@ void main()
 	vec3 reflectionDirection = reflect(gl_WorldRayDirectionEXT, worldNormal);
 	vec3 refColor = computeReflection(worldPos, reflectionDirection, worldNormal, lightpos, lightIntesity);
 	// Combine with diffuse term if desired
-	hitValue = diff * vec3(0.8, 0.8, 0.8) * lightIntesity + refColor;
+	//diff * vec3(0.8, 0.8, 0.8) * lightIntesity + refColor
+	hitValue = vec3(albedo) * a;
 }

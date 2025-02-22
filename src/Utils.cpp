@@ -54,13 +54,13 @@ void vk::ExecuteSingleTimeCommands(Context& context, std::function<void(VkComman
 }
 
 void vk::ImageBarrier(
-	VkCommandBuffer cmd, 
-	VkImage img, 
-	VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, 
-	VkImageLayout srcLayout, VkImageLayout dstLayout, 
-	VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, 
-	VkImageSubresourceRange subresourceRange, 
-	uint32_t srcQueueFamilyIndex, 
+	VkCommandBuffer cmd,
+	VkImage img,
+	VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask,
+	VkImageLayout srcLayout, VkImageLayout dstLayout,
+	VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask,
+	VkImageSubresourceRange subresourceRange,
+	uint32_t srcQueueFamilyIndex,
 	uint32_t dstQueueFamilyIndex)
 {
 	VkImageMemoryBarrier imgBarrier = {
@@ -78,11 +78,12 @@ void vk::ImageBarrier(
 	vkCmdPipelineBarrier(cmd, srcStageMask, dstStageMask, 0, 0, nullptr, 0, nullptr, 1, &imgBarrier);
 }
 
-VkDescriptorSetLayout vk::CreateDescriptorSetLayout(vk::Context& context, const std::vector<VkDescriptorSetLayoutBinding>& bindings)
+VkDescriptorSetLayout vk::CreateDescriptorSetLayout(vk::Context& context, const std::vector<VkDescriptorSetLayoutBinding>& bindings, VkDescriptorSetLayoutCreateFlags flags)
 {
 	VkDescriptorSetLayoutCreateInfo info{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
 	info.bindingCount = static_cast<uint32_t>(bindings.size());
 	info.pBindings = bindings.data();
+	info.flags = flags;
 
 	VkDescriptorSetLayout layout = VK_NULL_HANDLE;
 	VK_CHECK(vkCreateDescriptorSetLayout(context.device, &info, nullptr, &layout), "Failed to crate descriptor set layout");
@@ -117,7 +118,7 @@ void vk::AllocateDescriptorSet(Context& context, VkDescriptorPool descriptorPool
 }
 
 
-// Define a descriptor set layout binding 
+// Define a descriptor set layout binding
 // binding = which index slot to bind to e.g. 0,1,2..
 // type = what is the layout binding type e.g. uniform or sampler
 // shadeStage = which shader will this be accessed and used in? e.g. vertex, fragment or both
@@ -178,7 +179,7 @@ void vk::UpdateDescriptorSet(Context& context, uint32_t binding, VkAccelerationS
 	vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
 }
 
-VkSampler vk::CreateSampler(Context& context, VkSamplerAddressMode mode, VkBool32 EnableAnisotropic, VkCompareOp compareOp, 
+VkSampler vk::CreateSampler(Context& context, VkSamplerAddressMode mode, VkBool32 EnableAnisotropic, VkCompareOp compareOp,
 	VkFilter magFilter, VkFilter minFilter, VkSamplerMipmapMode samplerMipmapMode)
 {
 	VkSamplerCreateInfo samplerInfo{};

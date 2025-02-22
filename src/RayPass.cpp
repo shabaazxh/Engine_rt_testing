@@ -275,7 +275,9 @@ void vk::RayPass::BuildDescriptors()
 			CreateDescriptorBinding(2, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
 			CreateDescriptorBinding(3, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
 			CreateDescriptorBinding(4, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
-			CreateDescriptorBinding(5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR)
+			CreateDescriptorBinding(5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
+			CreateDescriptorBinding(6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
+			CreateDescriptorBinding(7, 300, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR)
 		};
 
 		m_descriptorSetLayout = CreateDescriptorSetLayout(context, bindings);
@@ -325,8 +327,33 @@ void vk::RayPass::BuildDescriptors()
 		offsetBufferInfo.offset = 0;
 		offsetBufferInfo.range = VK_WHOLE_SIZE;
 
+		VkDescriptorBufferInfo materialBufferInfo{};
+		materialBufferInfo.buffer = scene->RTMaterialsBuffer.buffer;
+		materialBufferInfo.offset = 0;
+		materialBufferInfo.range = VK_WHOLE_SIZE;
+
 		UpdateDescriptorSet(context, 3, vertexBufferInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
 		UpdateDescriptorSet(context, 4, indexBufferInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
 		UpdateDescriptorSet(context, 5, offsetBufferInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+		UpdateDescriptorSet(context, 6, materialBufferInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+	}
+
+	std::vector<VkDescriptorImageInfo> imageInfos;
+
+
+	for (size_t i = 0; i < scene->textures.size(); i++)
+	{
+		VkDescriptorImageInfo imgInfo = {
+			.sampler = repeatSamplerAniso,
+			.imageView = scene->textures[i].imageView,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+
+		imageInfos.push_back(imgInfo);
+	}
+
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		BulkImageUpdate(context, 7, imageInfos, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 	}
 }

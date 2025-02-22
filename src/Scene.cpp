@@ -56,6 +56,40 @@ void vk::Scene::AddModel(GLTFModel& GLTF, MaterialManager& materialManager)
 		}
 	}
 
+
+	// collect all of the texture paths
+	// we need to create a material and when we push
+	// theres a material per-mesh, we need to be able to index into a material, get it's albedo index to index into an array of textures
+	// TODO: @IMPROVE -> check if a pre-existing albedo texture with same name exists, if so just use it's index for current materials albedo
+	std::vector<std::string> texture_paths;
+	materialsRT.resize(GLTF.meshes.size()); // each mesh has a unique material for now
+	for (size_t meshIndex = 0; meshIndex < GLTF.meshes.size(); meshIndex++)
+	{
+		MaterialRT materialRT = {};
+		const auto& meshData = GLTF.meshes[meshIndex];
+		for (size_t i = 0; i < 1; i++) // should be looping until meshData.textures.size() but we're collecting only albedo for now
+		{
+			texture_paths.push_back(meshData.textures[i]);
+			materialRT.albedoIndex = static_cast<uint32_t>(texture_paths.size() - 1);
+		}
+
+		// if mesh 0 is drawn first, it'll index into material[0] and get the indexes pointing to the right textures in the texture array
+		materialsRT[meshIndex] = std::move(materialRT);
+		//meshData.materialIndex = static_cast<uint32_t>(mesh); // material index should be the same as the order the meshes appear
+
+	}
+
+	// now begin to load the textures
+	textures.resize(texture_paths.size());
+	// TODO: @PROBLEM: All textures are being loaded as SRGB, which is wrong for roughness and metallic. Ok for now since we're loading only albedo
+	for (size_t i = 0; i < texture_paths.size(); i++)
+	{
+		textures[i] = std::move(LoadTextureFromDisk(texture_paths[i], context, VK_FORMAT_R8G8B8A8_SRGB));
+	}
+
+	// now i need a descriptor pool which allows updating after binding which allows indexing
+	// use VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT_EXT as flag?
+
 	std::vector<Vertex> allVerts;
 	std::vector<uint32_t> allIndices;
 	std::vector<glm::uvec2> meshOffsets;
@@ -91,6 +125,18 @@ void vk::Scene::AddModel(GLTFModel& GLTF, MaterialManager& materialManager)
 
 	VkDeviceSize offsetSize = sizeof(meshOffsets[0]) * meshOffsets.size();
 	CreateAndUploadBuffer(context, meshOffsets.data(), offsetSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, meshOffsetBuffer);
+
+	/*
+	*
+	*  This will give us an array of materials e.g.
+	* struct Material
+	* {
+	*	uint albedoIndex;
+	* }
+	* layout(binding = x) materials[]; <- we can then index into this using the mesh instance
+	*/
+	VkDeviceSize materialSize = sizeof(materialsRT[0]) * materialsRT.size();
+	CreateAndUploadBuffer(context, materialsRT.data(), materialSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, RTMaterialsBuffer);
 
 	gltfModels.push_back(std::move(GLTF));
 
@@ -462,6 +508,10 @@ void vk::Scene::Update(GLFWwindow* window)
 
 void vk::Scene::Destroy()
 {
+	vertexBuffer.Destroy(context.device);
+	indexBuffer.Destroy(context.device);
+	meshOffsetBuffer.Destroy(context.device);
+	RTMaterialsBuffer.Destroy(context.device);
 	// Destroy model resources for the GLTF resources loaded in
 	if (!gltfModels.empty())
 	{

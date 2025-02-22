@@ -54,6 +54,10 @@ namespace vk
 		Buffer vertexBuffer;
 		Buffer indexBuffer;
 		Buffer meshOffsetBuffer;
+		Buffer RTMaterialsBuffer;
+
+		std::vector<Image> textures;
+		std::vector<MaterialRT> materialsRT;
 	private:
 		Context& context;
 		MaterialManager& materialManager;

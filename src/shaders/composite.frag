@@ -21,5 +21,5 @@ void main()
 	vec3 result = ldrColor;
 	vec3 gammaCorrectedColor = pow(result, vec3(1.0 / 2.2));
 
-	fragColor = vec4(vec3(lighting), 1.0);
+	fragColor = vec4(vec3(gammaCorrectedColor), 1.0);
 }
