@@ -41,26 +41,87 @@ layout(set = 0, binding = 2) uniform SceneUniform
 	float farPlane;
 } ubo;
 
+struct RayPayLoad
+{
+	vec3 color;
+};
 
 // Shadow ray payload (only needs a boolean to check occlusion)
 layout(location = 1) rayPayloadEXT bool isShadowed;
+layout(location = 2) rayPayloadEXT RayPayLoad reflectionPayload;
 
 float random (vec2 st)
 {
 	return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
 }
 
-// Simple hash function to generate a pseudo-random float in [0, 1]
 float hash(vec3 p, float seed) {
     return fract(sin(dot(p + seed, vec3(12.9898, 78.233, 45.5432))) * 43758.5453);
 }
 
+float hash(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * 0.13);
+    p3 += dot(p3, p3.yzx + 3.333);
+    return fract((p3.x + p3.y) * p3.z);
+}
 
+
+uint JenkinsHash(uint x)
+{
+	x += x << 10;
+	x ^= x >> 6;
+	x += x << 3;
+	x ^= x >> 11;
+	x += x << 15;
+
+	return x;
+}
+
+// need to somehow init the RNG
+//uint InitRNG(ivec2 pixel, ivec2 resolution, uint frame)
+//{
+//	uint rngState = dot(pixel, ivec2(1, resolution.x)) ^ JenkinsHash(frame);
+//	return JenkinsHash(rngState);
+//}
 
 float UintToFloat(uint x)
 {
-	return float();
+	return float(0x3f800000 | (x >> 9)) - 1.f;
 }
+
+uint XorShift(inout uint rngState)
+{
+	rngState ^= rngState << 13;
+	rngState ^= rngState >> 17;
+	rngState ^= rngState << 5;
+	return rngState;
+}
+
+float Rand(inout uint rngState)
+{
+	return UintToFloat(XorShift(rngState));
+}
+
+vec3 CosHemisphereDirection(vec3 n, vec3 pos, float seed) {
+    // Generate two random numbers
+    float r1 = hash(pos, seed);
+    float r2 = hash(pos + vec3(1.0, 2.0, 3.0), seed); // Offset to get a different value
+
+    // Cosine-weighted sampling
+    float theta = 2.0 * 3.14159265359 * r1;  // Azimuthal angle
+    float r = sqrt(r2);                      // Radial distance (cosine weighting)
+    float x = r * cos(theta);
+    float y = r * sin(theta);
+    float z = sqrt(1.0 - r2);                // Correctly bias towards normal
+
+    // Convert to world space
+    vec3 up = abs(n.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+    vec3 tangent = normalize(cross(up, n));
+    vec3 bitangent = cross(n, tangent);
+
+    return tangent * x + bitangent * y + n * z;
+}
+
 
 // Generate a random direction in a hemisphere around the normal
 vec3 randomHemisphereDirection(vec3 n, vec3 pos, float seed) {
@@ -96,7 +157,7 @@ float ao(vec3 pos, vec3 n, int samples) {
         float seed = float(i);
 
         // Generate random direction in hemisphere
-        vec3 dir = randomHemisphereDirection(n, pos, seed);
+        vec3 dir = CosHemisphereDirection(n, pos, seed);
 		isShadowed = true;
         // Trace ray (assuming a trace function exists)
         // Replace with your actual ray-tracing call
@@ -121,6 +182,35 @@ float ao(vec3 pos, vec3 n, int samples) {
 
     // Average the occlusion and invert for AO
     return 1.0 - (a / float(samples));
+}
+
+
+// L = normalize(lightpos - worldpos);
+vec3 computeReflection(vec3 pos, vec3 dir, vec3 normal, vec3 lightPos, float lightIntensity) {
+    isShadowed = true;  // Default to "hit" until proven otherwise
+    traceRayEXT(
+        topLevelAS,
+        gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT,  // Shadow-like flags
+        0xFF,                   // Hit all objects
+        0,                      // Hit group offset
+        0,                      // Geometry offset
+        1,                      // Miss shader index (shadow.miss)
+        pos,                    // Origin
+        0.001,                  // Min distance
+        dir,                    // Reflection direction
+        10000.0,               // Max distance
+        1                       // Payload index for isShadowed
+    );
+
+    if (!isShadowed) {
+        // Ray missed: reflect environment (e.g., sky)
+        return vec3(0.5, 0.7, 1.0);  // Light blue sky
+    } else {
+        // Ray hit: approximate lighting at the hit point
+        vec3 L = normalize(lightPos - pos);  // Light direction (approximation)
+        float diff = max(dot(normal, L), 0.0);  // Diffuse term
+        return vec3(0.02) + diff * vec3(0.8, 0.8, 0.8) * lightIntensity;  // Ambient + diffuse
+    }
 }
 
 void main()
@@ -154,8 +244,8 @@ void main()
 	vec3 worldNormal = normalize(vec3(objectNormal * gl_WorldToObjectEXT).xyz);
 	//worldNormal = -worldNormal;
 
-	float lightIntesity = 100.0;
-	vec3 lightpos = vec3(300.0, 2000.0, 1.0);
+	float lightIntesity = 1.0;
+	vec3 lightpos = vec3(300.0, 400.0, 1.0);
 	vec3 L = normalize(lightpos - worldPos);  // Corrected light direction
 	float diff = max(dot(worldNormal, L), 0.0);
 
@@ -191,8 +281,8 @@ void main()
 
 	// check for reflections here?
 
-	vec3 reflectionOrigin = worldPos;
-	vec3 reflectionDirection = reflect(gl_WorldRayDirectionEXT, worldNormal);
+
+
 	float a = ao(worldPos, worldNormal, 4);
 //	traceRayEXT(
 //		topLevelAS,
@@ -209,5 +299,9 @@ void main()
 //	);
 
 	// Final lighting calculation
-	hitValue = vec3(a,a,a);
+
+	vec3 reflectionDirection = reflect(gl_WorldRayDirectionEXT, worldNormal);
+	vec3 refColor = computeReflection(worldPos, reflectionDirection, worldNormal, lightpos, lightIntesity);
+	// Combine with diffuse term if desired
+	hitValue = diff * vec3(0.8, 0.8, 0.8) * lightIntesity + refColor;
 }

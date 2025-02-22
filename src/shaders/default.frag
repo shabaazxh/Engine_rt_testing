@@ -143,8 +143,11 @@ void main()
     vec3 wNormal = normalize(WorldNormal).xyz;
 
     // == Metal and Roughness ==
-    float roughness = max(texture(metallicRoughness, uv).b, 0.1);
-    float metallic = texture(metallicRoughness, uv).g;
+//    float roughness = max(texture(metallicRoughness, uv).b, 0.1);
+//    float metallic = texture(metallicRoughness, uv).g;
+
+	float roughness = 1.0f;
+	float metallic = 0.0f;
 
     vec3 outLight = vec3(0.0);
 
@@ -181,7 +184,7 @@ void main()
 
 	float shadowTerm = 1.0 - PCF(WorldPos.xyz);
 	vec3 ambient = vec3(0.1) * color.rgb;
-	fragColor = vec4(vec3(wNormal), 1.0);
+	fragColor = vec4(vec3(ambient + outLight), 1.0);
 
 	float brightness = dot(fragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
 	if(brightness > 1.0)
