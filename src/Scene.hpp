@@ -45,6 +45,7 @@ namespace vk
 
 		void CreateBLAS();
 		void CreateTLAS();
+
 		std::vector<AccelerationStructure> BottomLevelAccelerationStructures;
 		AccelerationStructure TopLevelAccelerationStructure;
 		std::vector<GLTFModel> gltfModels;
@@ -67,6 +68,7 @@ namespace vk
 		std::vector<Light>  m_Lights;
 		LightBuffer m_LightBuffer;
 		std::vector<Buffer> m_LightUBO;
+		std::unique_ptr<Buffer> instanceBuffer;
 
 	};
 }

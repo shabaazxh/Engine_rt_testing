@@ -313,7 +313,7 @@ void vk::Scene::CreateTLAS()
 	}
 
 
-	std::unique_ptr<Buffer> instanceBuffer = std::make_unique<Buffer>(
+	instanceBuffer = std::make_unique<Buffer>(
 		CreateBuffer(
 			"InstanceBuffer",
 			context,
@@ -421,6 +421,7 @@ void vk::Scene::CreateTLAS()
 	);
 
 	scratchBuffer.Destroy(context.device);
+	//instanceBuffer->Destroy(context.device);
 
 	VkAccelerationStructureDeviceAddressInfoKHR accelerationDeviceAddressInfo = {
 		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
@@ -512,6 +513,20 @@ void vk::Scene::Destroy()
 	indexBuffer.Destroy(context.device);
 	meshOffsetBuffer.Destroy(context.device);
 	RTMaterialsBuffer.Destroy(context.device);
+	instanceBuffer->Destroy(context.device);
+	vkDestroyAccelerationStructureKHR(context.device, TopLevelAccelerationStructure.handle, nullptr);
+	TopLevelAccelerationStructure.buffer->Destroy(context.device);
+
+	for (auto& BLAS : BottomLevelAccelerationStructures)
+	{
+		vkDestroyAccelerationStructureKHR(context.device, BLAS.handle, nullptr);
+		BLAS.buffer->Destroy(context.device);
+	}
+
+	for (auto& texture : textures)
+	{
+		texture.Destroy(context.device);
+	}
 	// Destroy model resources for the GLTF resources loaded in
 	if (!gltfModels.empty())
 	{

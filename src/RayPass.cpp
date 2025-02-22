@@ -22,8 +22,6 @@ vk::RayPass::RayPass(Context& context, std::shared_ptr<Scene>& scene, std::share
 	m_Pipeline{ VK_NULL_HANDLE },
 	m_PipelineLayout{ VK_NULL_HANDLE },
 	m_descriptorSetLayout{ VK_NULL_HANDLE },
-	m_renderPass{ VK_NULL_HANDLE },
-	m_framebuffer{ VK_NULL_HANDLE },
 	m_width{ 0 },
 	m_height{ 0 }
 {
@@ -64,10 +62,11 @@ vk::RayPass::~RayPass()
 
 	vkDestroyPipeline(context.device, m_Pipeline, nullptr);
 	vkDestroyPipelineLayout(context.device, m_PipelineLayout, nullptr);
-
-	vkDestroyFramebuffer(context.device, m_framebuffer, nullptr);
-	vkDestroyRenderPass(context.device, m_renderPass, nullptr);
 	vkDestroyDescriptorSetLayout(context.device, m_descriptorSetLayout, nullptr);
+
+	RayGenShaderBindingTable->Destroy(context.device);
+	MissShaderBindingTable->Destroy(context.device);
+	HitShaderBindingTable->Destroy(context.device);
 }
 
 void vk::RayPass::Resize()

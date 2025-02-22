@@ -158,19 +158,13 @@ vec3 randomHemisphereDirection(vec3 n, vec3 pos, float seed) {
     return tangent * dir.x + bitangent * dir.y + n * dir.z;
 }
 
-// Ambient Occlusion function for closest hit shader
 float ao(vec3 pos, vec3 n, int samples) {
     float a = 0.0;
 
     for (int i = 0; i < samples; i++) {
-        // Use sample index as a seed for variation
         float seed = float(i);
-
-        // Generate random direction in hemisphere
         vec3 dir = CosHemisphereDirection(n, pos, seed);
 		isShadowed = true;
-        // Trace ray (assuming a trace function exists)
-        // Replace with your actual ray-tracing call
         traceRayEXT(
 			topLevelAS,
 			gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT, // Terminate on first hit
@@ -186,18 +180,15 @@ float ao(vec3 pos, vec3 n, int samples) {
 		);
 
 		a += isShadowed == true ? 1.0 :0.0;
-
-        // Accumulate occlusion (0 = occluded, 1 = unoccluded)
     }
-
-    // Average the occlusion and invert for AO
     return 1.0 - (a / float(samples));
 }
 
 
 // L = normalize(lightpos - worldpos);
 vec3 computeReflection(vec3 pos, vec3 dir, vec3 normal, vec3 lightPos, float lightIntensity) {
-    isShadowed = true;  // Default to "hit" until proven otherwise
+
+	isShadowed = true;  // Default to "hit" until proven otherwise
     traceRayEXT(
         topLevelAS,
         gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT,  // Shadow-like flags
@@ -233,7 +224,6 @@ void main()
 
 	Material material = materials[meshID];
 
-
 	const uint i0 = indices[indexOffset + 3 * primitiveID + 0] + vertexOffset;
 	const uint i1 = indices[indexOffset + 3 * primitiveID + 1] + vertexOffset;
 	const uint i2 = indices[indexOffset + 3 * primitiveID + 2] + vertexOffset;
@@ -264,9 +254,8 @@ void main()
 
 	//objectNormal = (n0 * barycentrics.x + n1 * barycentrics.y + n2 * barycentrics.z);
 	vec3 worldNormal = normalize(vec3(objectNormal * gl_WorldToObjectEXT).xyz);
-	//worldNormal = -worldNormal;
 
-	float lightIntesity = 1.0;
+	float lightIntesity = 100.0;
 	vec3 lightpos = vec3(300.0, 400.0, 1.0);
 	vec3 L = normalize(lightpos - worldPos);  // Corrected light direction
 	float diff = max(dot(worldNormal, L), 0.0);
@@ -301,30 +290,12 @@ void main()
 		att = 0.1;
 	}
 
-	// check for reflections here?
-
-
-
 	float a = ao(worldPos, worldNormal, 4);
-//	traceRayEXT(
-//		topLevelAS,
-//		gl_RayFlagsNoneEXT,
-//		0xFF,
-//		0,
-//		0,
-//		0,
-//		reflectionOrigin,
-//		0.1,
-//		reflectionDirection,
-//		100000.0,
-//		0
-//	);
-
-	// Final lighting calculation
 
 	vec3 reflectionDirection = reflect(gl_WorldRayDirectionEXT, worldNormal);
 	vec3 refColor = computeReflection(worldPos, reflectionDirection, worldNormal, lightpos, lightIntesity);
-	// Combine with diffuse term if desired
-	//diff * vec3(0.8, 0.8, 0.8) * lightIntesity + refColor
-	hitValue = vec3(albedo) * a;
+
+	vec3 diffuse = albedo * diff * att;
+    hitValue = diffuse * a * lightIntesity; // Adjust reflection strength
+
 }

@@ -35,8 +35,6 @@ namespace vk
 		VkPipelineLayout m_PipelineLayout;
 		std::vector<VkDescriptorSet> m_descriptorSets;
 		VkDescriptorSetLayout m_descriptorSetLayout;
-		VkRenderPass m_renderPass;
-		VkFramebuffer m_framebuffer;
 
 		uint32_t m_width;
 		uint32_t m_height;
@@ -44,6 +42,5 @@ namespace vk
 		std::unique_ptr<Buffer> RayGenShaderBindingTable;
 		std::unique_ptr<Buffer> MissShaderBindingTable;
 		std::unique_ptr<Buffer> HitShaderBindingTable;
-
 	};
 }
