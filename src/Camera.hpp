@@ -12,9 +12,9 @@
 
 constexpr float m_speedIncreaseAmount = 100.0f;
 constexpr float m_speedDecreaseAmount = 8.0f;
-constexpr float maxSpeed = 500.0;
+constexpr float maxSpeed = 1000.0;
 constexpr float minSpeed = 1.0f;
-constexpr float defaultSpeed = 3.0f;
+constexpr float defaultSpeed = 300.0f;
 
 namespace vk
 {
@@ -68,7 +68,7 @@ namespace vk
 		void UpdateCameraRotation();
 		void UpdateCameraAngles(const glm::vec2& offset);
 
-		// Compute the camera direction based on the cameras updated rotation 
+		// Compute the camera direction based on the cameras updated rotation
 		void UpdateCameraDirection();
 
 		// Debug position log for the camera

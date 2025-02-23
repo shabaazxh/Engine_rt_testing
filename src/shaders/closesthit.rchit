@@ -181,7 +181,40 @@ float ao(vec3 pos, vec3 n, int samples) {
 
 		a += isShadowed == true ? 1.0 :0.0;
     }
+
+
+
     return 1.0 - (a / float(samples));
+}
+
+#define PI 3.14159265359
+
+vec3 computeLighting(vec3 pos, vec3 n)
+{
+    uint seed = uint(1) * 3; // From ray-gen
+    vec3 omega_i = CosHemisphereDirection(n, pos, seed);
+
+    isShadowed = true;
+    traceRayEXT(
+        topLevelAS,
+        gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT,
+        0xFF,
+        1, // perhaps this means index 1 for when miss shaders begin
+        0,
+        1, // perhaps this means index 1 within the miss collection we have
+        pos,
+        0.001,
+        omega_i,
+        10000,
+        1
+    );
+
+    if (isShadowed) {
+        float contribution = max(dot(n, omega_i), 0.0);
+        return vec3(1);
+    }
+
+    return vec3(0, 0, 0);
 }
 
 
@@ -293,9 +326,8 @@ void main()
 	float a = ao(worldPos, worldNormal, 4);
 
 	vec3 reflectionDirection = reflect(gl_WorldRayDirectionEXT, worldNormal);
-	vec3 refColor = computeReflection(worldPos, reflectionDirection, worldNormal, lightpos, lightIntesity);
-
+	//vec3 refColor = computeReflection(worldPos, reflectionDirection, worldNormal, lightpos, lightIntesity);
 	vec3 diffuse = albedo * diff * att;
-    hitValue = diffuse * a * lightIntesity; // Adjust reflection strength
-
+	vec3 lighting = computeLighting(worldPos, worldNormal);
+    hitValue = vec3(1.0 - lighting); // Grayscale AO
 }
