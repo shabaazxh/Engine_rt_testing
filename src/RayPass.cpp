@@ -193,10 +193,12 @@ void vk::RayPass::CreatePipeline()
 		.AddShader("assets/shaders/miss.rmiss.spv", ShaderType::MISS)
 		.AddShader("assets/shaders/shadowmiss.rmiss.spv", ShaderType::MISS)
 		.AddShader("assets/shaders/closesthit.rchit.spv", ShaderType::HIT)
+		.AddShader("assets/shaders/diffusehit.rchit.spv", ShaderType::HIT)
 		.CreateShaderGroup(VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR, 0) // raygen
 		.CreateShaderGroup(VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR, 1) // miss
 		.CreateShaderGroup(VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR, 2) // shadow-miss
 		.CreateShaderGroup(VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR, VK_SHADER_UNUSED_KHR, 3) // regular hit
+		.CreateShaderGroup(VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR, VK_SHADER_UNUSED_KHR, 4) // diffuse hit
 		.SetPipelineLayout({ {m_descriptorSetLayout} })
 		.Build();
 
@@ -219,7 +221,7 @@ void vk::RayPass::CreateShaderBindingTable()
 	const uint32_t           handle_size = rayTracingPipelineProperties.shaderGroupHandleSize;
 	const uint32_t           handle_size_aligned = aligned_size(rayTracingPipelineProperties.shaderGroupHandleSize, rayTracingPipelineProperties.shaderGroupHandleAlignment);
 	const uint32_t           handle_alignment = rayTracingPipelineProperties.shaderGroupHandleAlignment;
-	const uint32_t           group_count = static_cast<uint32_t>(4);
+	const uint32_t           group_count = static_cast<uint32_t>(5);
 	const uint32_t           sbt_size = group_count * handle_size_aligned;
 	const VkBufferUsageFlags sbt_buffer_usage_flags = VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 	const VmaMemoryUsage     sbt_memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
@@ -248,7 +250,7 @@ void vk::RayPass::CreateShaderBindingTable()
 		CreateBuffer(
 			"HitShaderBindingTable",
 			context,
-			handle_size_aligned,
+			handle_size_aligned * 2,
 			sbt_buffer_usage_flags,
 			VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
 		)
@@ -260,7 +262,7 @@ void vk::RayPass::CreateShaderBindingTable()
 
 	RayGenShaderBindingTable->WriteToBuffer(shaderHandleStorage.data(), handle_size_aligned);
 	MissShaderBindingTable->WriteToBuffer(shaderHandleStorage.data() + handle_size_aligned, handle_size_aligned * 2);
-	HitShaderBindingTable->WriteToBuffer(shaderHandleStorage.data() + handle_size_aligned * 3, handle_size_aligned);
+	HitShaderBindingTable->WriteToBuffer(shaderHandleStorage.data() + handle_size_aligned * 3, handle_size_aligned * 2);
 }
 
 void vk::RayPass::BuildDescriptors()

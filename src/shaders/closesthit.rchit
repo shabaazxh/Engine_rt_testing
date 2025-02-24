@@ -7,6 +7,8 @@ hitAttributeEXT vec3 attribs;
 
 layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
 
+#define PI 3.14159265359
+
 // Large buffers containing all mesh data
 struct VertexData {
     vec4 position;
@@ -53,12 +55,12 @@ layout(set = 0, binding = 2) uniform SceneUniform
 
 struct RayPayLoad
 {
-	vec3 color;
+	vec3 hitcolor;
+	vec3 hitnormal;
 };
 
-// Shadow ray payload (only needs a boolean to check occlusion)
 layout(location = 1) rayPayloadEXT bool isShadowed;
-layout(location = 2) rayPayloadEXT RayPayLoad reflectionPayload;
+layout(location = 2) rayPayloadEXT RayPayLoad diffusePayLoad;
 
 float random (vec2 st)
 {
@@ -145,17 +147,23 @@ vec3 randomHemisphereDirection(vec3 n, vec3 pos, float seed) {
 
     // Convert to Cartesian coordinates
     float x = sin(phi) * cos(theta);
-    float y = sin(phi) * sin(theta);
-    float z = cos(phi);
+    float y = cos(phi);
+    float z = sin(phi) * sin(theta);
 
     vec3 dir = vec3(x, y, z);
 
     // Align with normal (create a basis and transform)
-    vec3 up = abs(n.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+    vec3 up = abs(n.y) < 0.999 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
     vec3 tangent = normalize(cross(up, n));
     vec3 bitangent = cross(n, tangent);
 
     return tangent * dir.x + bitangent * dir.y + n * dir.z;
+}
+
+float value(vec3 direction, vec3 normal)
+{
+	float cosTheta = max(0.0f, dot(normal, direction));
+	return cosTheta / PI;
 }
 
 float ao(vec3 pos, vec3 n, int samples) {
@@ -189,9 +197,27 @@ float ao(vec3 pos, vec3 n, int samples) {
 
 #define PI 3.14159265359
 
+uvec2 pcg2d(uvec2 v)
+{
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * 1664525u;
+    v.y += v.x * 1664525u;
+    v = v ^ (v >> 16u);
+    v.x += v.y * 1664525u;
+    v.y += v.x * 1664525u;
+    v = v ^ (v >> 16u);
+    return v;
+}
+
+float rand(inout uint state)
+{
+    state = pcg2d(uvec2(state, 0u)).x;
+    return float(state) / float(0xffffffffu);
+}
+
 vec3 computeLighting(vec3 pos, vec3 n)
 {
-    uint seed = uint(1) * 3; // From ray-gen
+    uint seed = gl_LaunchIDEXT.x + gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x; // Unique per pixel
     vec3 omega_i = CosHemisphereDirection(n, pos, seed);
 
     isShadowed = true;
@@ -209,12 +235,51 @@ vec3 computeLighting(vec3 pos, vec3 n)
         1
     );
 
+	float pdfValue = value(omega_i, n);
+
     if (isShadowed) {
         float contribution = max(dot(n, omega_i), 0.0);
         return vec3(1);
     }
 
     return vec3(0, 0, 0);
+}
+
+vec3 computeDiffuse(vec3 pos, vec3 n)
+{
+    uint seed = gl_LaunchIDEXT.x;
+    vec3 omega_i = CosHemisphereDirection(n, pos, seed);
+
+    // Clear payload to detect if it’s unchanged
+    diffusePayLoad.hitcolor = vec3(0.0);
+    diffusePayLoad.hitnormal = vec3(0.0);
+
+    traceRayEXT(
+        topLevelAS,
+        gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT,
+        0xFF,
+        1, // Hit group 1 (diffusehit.rchit.spv)
+        0,
+        1, // Miss index 1 (shadowmiss.rmiss.spv)
+        pos,
+        0.001,
+        omega_i,
+        10000,
+        2
+    );
+
+    // Diffuse BRDF: albedo / PI
+    vec3 brdf = diffusePayLoad.hitcolor / PI;
+    float L_intensity = 2.0f;
+    float cosTheta = max(dot(diffusePayLoad.hitnormal, omega_i), 0.0); // Use input normal for incident angle
+    float pdfValue = value(omega_i, diffusePayLoad.hitnormal); // PDF based on input normal
+
+    vec3 outLight = vec3(0.0);
+    if (pdfValue > 0.0001) { // Avoid division by zero
+        outLight = outLight + (brdf * L_intensity * cosTheta) / pdfValue;
+    }
+
+    return outLight; // Final color with albedo
 }
 
 
@@ -329,5 +394,5 @@ void main()
 	//vec3 refColor = computeReflection(worldPos, reflectionDirection, worldNormal, lightpos, lightIntesity);
 	vec3 diffuse = albedo * diff * att;
 	vec3 lighting = computeLighting(worldPos, worldNormal);
-    hitValue = vec3(1.0 - lighting); // Grayscale AO
+    hitValue = computeDiffuse(pos, worldNormal) * albedo; // Grayscale AO
 }
