@@ -15,7 +15,15 @@ layout(set = 0, binding = 2) uniform SceneUniform
 	float farPlane;
 } ubo;
 
-layout(location = 0) rayPayloadEXT vec3 hitValue;
+
+struct RayPayLoad
+{
+    vec3 colour;
+    vec3 normal;
+    float hit;
+};
+
+layout(location = 0) rayPayloadEXT RayPayLoad rayPayLoad;
 
 const int NUM_SAMPLES = 1;
 
@@ -40,23 +48,27 @@ void main()
     float tmin = 0.001;
     float tmax = 10000.0;
 
-    hitValue = vec3(0.0);
+    rayPayLoad.colour = vec3(0.0);
+    rayPayLoad.normal = vec3(0.0);
+    rayPayLoad.hit = -1.0f;
+
     // Seed for random sampling (based on pixel ID)
     uint seed = uint(gl_LaunchIDEXT.x + gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x);
     vec3 totalRadiance = vec3(0.0);
+
     for (int i = 0; i < NUM_SAMPLES; i++) {
+
         vec2 jitter = vec2(rand(seed), rand(seed)) - 0.5; // [-0.5, 0.5]
         vec2 jitteredD = d + jitter * (1.0 / gl_LaunchSizeEXT.xy);
 
         vec4 target = inverse(ubo.projection) * vec4(jitteredD.x, jitteredD.y, 1, 1);
         vec4 direction = normalize(inverse(ubo.view) * vec4(normalize(target.xyz), 0));
 
-        hitValue = vec3(0.0); // Reset payload
         traceRayEXT(topLevelAS, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0, origin.xyz, tmin, direction.xyz, tmax, 0);
 
-        totalRadiance += hitValue; // Accumulate
+        totalRadiance += rayPayLoad.colour;
     }
 
-    hitValue = totalRadiance / float(NUM_SAMPLES);
-    imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(hitValue, 0.0));
+    rayPayLoad.colour = totalRadiance / float(NUM_SAMPLES);
+    imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(rayPayLoad.colour, 0.0));
 }

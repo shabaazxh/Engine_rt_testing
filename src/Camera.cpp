@@ -11,7 +11,7 @@
 
 vk::Camera::Camera(Context& context, const glm::vec3 position, glm::vec3 direction, glm::vec3 up, float aspect) : context{ context }, m_position{ position }, m_direction{ direction }, m_up{ up }
 {
-	m_mouseSensitivity = 0.01f;
+	m_mouseSensitivity = 0.1f;
 	m_increaseSpeed = 0.0f;
 	m_transform.viewportSize = glm::vec2(context.extent.width, context.extent.height);
 	m_transform.nearPlane = 0.1f;
@@ -38,7 +38,7 @@ void vk::Camera::Update(GLFWwindow* window, uint32_t width, uint32_t height, dou
 {
 	UpdateTransforms(width, height);
 
-	// Write new data to the buffer to update uniform 
+	// Write new data to the buffer to update uniform
 	VkDeviceSize size = sizeof(CameraTransform);
 	m_cameraUBO[currentFrame].WriteToBuffer(m_transform, size);
 
@@ -126,7 +126,7 @@ void vk::Camera::UpdateCameraRotation()
 	// If we're using the mouse
 	if (inputMap[std::size_t(EInputState::MOUSING)])
 	{
-		// check if this is the first time mouse is being used, if so skip updating 
+		// check if this is the first time mouse is being used, if so skip updating
 		// skip next frame so we have the correct lastx and lasty position for cursor
 		if (wasMousing)
 		{
@@ -148,7 +148,7 @@ void vk::Camera::UpdateCameraRotation()
 	}
 }
 
-// Handling mouse movement based on learnings from 
+// Handling mouse movement based on learnings from
 /* Joey De Vries (2020). Learn OpenGL: Learn modern OpenGL graphics programming in a step-by-step fashion. Kendall & Welling. */
 void vk::Camera::UpdateCameraAngles(const glm::vec2& offset)
 {
@@ -157,7 +157,7 @@ void vk::Camera::UpdateCameraAngles(const glm::vec2& offset)
 	pitch = std::clamp(pitch, -89.0, 89.0);
 }
 
-// Compute the camera direction based on the cameras updated rotation 
+// Compute the camera direction based on the cameras updated rotation
 void vk::Camera::UpdateCameraDirection()
 {
 	glm::vec3 direction = {
