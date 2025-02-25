@@ -26,6 +26,11 @@ vk::RayPass::RayPass(Context& context, std::shared_ptr<Scene>& scene, std::share
 	m_height{ 0 }
 {
 
+	m_rtxSettingsUBO.resize(MAX_FRAMES_IN_FLIGHT);
+	for (auto& buffer : m_rtxSettingsUBO)
+		buffer = CreateBuffer("RTXUBO", context, sizeof(RTX), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+
+
 	m_width = context.extent.width;
 	m_height = context.extent.height;
 
@@ -58,6 +63,10 @@ vk::RayPass::RayPass(Context& context, std::shared_ptr<Scene>& scene, std::share
 
 vk::RayPass::~RayPass()
 {
+
+	for (auto& buffer : m_rtxSettingsUBO)
+		buffer.Destroy(context.device);
+
 	m_RenderTarget.Destroy(context.device);
 
 	vkDestroyPipeline(context.device, m_Pipeline, nullptr);
@@ -182,7 +191,9 @@ void vk::RayPass::Execute(VkCommandBuffer cmd)
 
 void vk::RayPass::Update()
 {
-
+	rtxSettings.bounces = rtxSettings.bounces;
+	rtxSettings.frameIndex = frameNumber;
+	m_rtxSettingsUBO[currentFrame].WriteToBuffer(&rtxSettings, sizeof(RTX));
 }
 
 void vk::RayPass::CreatePipeline()
@@ -194,11 +205,13 @@ void vk::RayPass::CreatePipeline()
 		.AddShader("assets/shaders/shadowmiss.rmiss.spv", ShaderType::MISS)
 		.AddShader("assets/shaders/closesthit.rchit.spv", ShaderType::HIT)
 		.AddShader("assets/shaders/diffusehit.rchit.spv", ShaderType::HIT)
+		.AddShader("assets/shaders/shadowhit.rchit.spv", ShaderType::HIT)
 		.CreateShaderGroup(VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR, 0) // raygen
 		.CreateShaderGroup(VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR, 1) // miss
 		.CreateShaderGroup(VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR, 2) // shadow-miss
 		.CreateShaderGroup(VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR, VK_SHADER_UNUSED_KHR, 3) // regular hit
 		.CreateShaderGroup(VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR, VK_SHADER_UNUSED_KHR, 4) // diffuse hit
+		.CreateShaderGroup(VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR, VK_SHADER_UNUSED_KHR, 5) // diffuse hit
 		.SetPipelineLayout({ {m_descriptorSetLayout} })
 		.Build();
 
@@ -221,7 +234,7 @@ void vk::RayPass::CreateShaderBindingTable()
 	const uint32_t           handle_size = rayTracingPipelineProperties.shaderGroupHandleSize;
 	const uint32_t           handle_size_aligned = aligned_size(rayTracingPipelineProperties.shaderGroupHandleSize, rayTracingPipelineProperties.shaderGroupHandleAlignment);
 	const uint32_t           handle_alignment = rayTracingPipelineProperties.shaderGroupHandleAlignment;
-	const uint32_t           group_count = static_cast<uint32_t>(5);
+	const uint32_t           group_count = static_cast<uint32_t>(6);
 	const uint32_t           sbt_size = group_count * handle_size_aligned;
 	const VkBufferUsageFlags sbt_buffer_usage_flags = VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 	const VmaMemoryUsage     sbt_memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
@@ -250,7 +263,7 @@ void vk::RayPass::CreateShaderBindingTable()
 		CreateBuffer(
 			"HitShaderBindingTable",
 			context,
-			handle_size_aligned * 2,
+			handle_size_aligned * 3,
 			sbt_buffer_usage_flags,
 			VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
 		)
@@ -262,7 +275,7 @@ void vk::RayPass::CreateShaderBindingTable()
 
 	RayGenShaderBindingTable->WriteToBuffer(shaderHandleStorage.data(), handle_size_aligned);
 	MissShaderBindingTable->WriteToBuffer(shaderHandleStorage.data() + handle_size_aligned, handle_size_aligned * 2);
-	HitShaderBindingTable->WriteToBuffer(shaderHandleStorage.data() + handle_size_aligned * 3, handle_size_aligned * 2);
+	HitShaderBindingTable->WriteToBuffer(shaderHandleStorage.data() + handle_size_aligned * 3, handle_size_aligned * 3);
 }
 
 void vk::RayPass::BuildDescriptors()
@@ -278,7 +291,9 @@ void vk::RayPass::BuildDescriptors()
 			CreateDescriptorBinding(4, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
 			CreateDescriptorBinding(5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
 			CreateDescriptorBinding(6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
-			CreateDescriptorBinding(7, 300, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR)
+			CreateDescriptorBinding(7, 300, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
+			CreateDescriptorBinding(8, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
+			CreateDescriptorBinding(9, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR)
 		};
 
 		m_descriptorSetLayout = CreateDescriptorSetLayout(context, bindings);
@@ -356,5 +371,23 @@ void vk::RayPass::BuildDescriptors()
 	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
 	{
 		BulkImageUpdate(context, 7, imageInfos, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	}
+
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		VkDescriptorBufferInfo bufferInfo{};
+		bufferInfo.buffer = scene->GetLightsUBO()[i].buffer;
+		bufferInfo.offset = 0;
+		bufferInfo.range = sizeof(LightBuffer);
+		UpdateDescriptorSet(context, 8, bufferInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+	}
+
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		VkDescriptorBufferInfo bufferInfo{};
+		bufferInfo.buffer = m_rtxSettingsUBO[i].buffer;
+		bufferInfo.offset = 0;
+		bufferInfo.range = sizeof(RTX);
+		UpdateDescriptorSet(context, 9, bufferInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 	}
 }

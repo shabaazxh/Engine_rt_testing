@@ -5,5 +5,5 @@ layout(location = 1) rayPayloadInEXT bool isShadowed;
 
 void main()
 {
-    isShadowed = true; // If we hit anything, we are in shadow
+    isShadowed = true;
 }

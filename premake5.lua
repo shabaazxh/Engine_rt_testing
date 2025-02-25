@@ -66,16 +66,13 @@ dofile( "util/glslc.lua" )
 
 -- Projects
 
-
-
-
-
-
 project "Engine"
 	local sources = { 
 		"src/**.cpp",
 		"src/**.hpp",
 		"src/**.hxx",
+		"third_party/imgui/*.cpp",
+		"third_party/imgui/*.h"
 	}
 
 	kind "ConsoleApp"
@@ -90,7 +87,8 @@ project "Engine"
 	links "x-glfw"
 	links "x-vma"
 	links "x-cgltf"
-
+	links "x-imgui"
+	
 	dependson "x-glm"
 
 project "Engine-shaders"

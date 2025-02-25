@@ -2,10 +2,33 @@
 #extension GL_EXT_ray_tracing : enable
 #extension GL_EXT_scalar_block_layout : require
 
+struct Light
+{
+	int Type;
+	vec4 LightPosition;
+	vec4 LightColour;
+	mat4 LightSpaceMatrix;
+};
+
+const int NUM_LIGHTS = 26;
+
+layout(set = 0, binding = 8) uniform LightBuffer {
+	Light lights[NUM_LIGHTS];
+} lightData;
+
+layout(set = 0, binding = 9) uniform RTXSettings
+{
+    int bounces;
+    int frameIndex;
+} rtx;
+
 struct RayPayLoad
 {
+    vec3 pos;
+    vec3 dir;
     vec3 colour;
-    vec3 normal;
+    vec3 hitnormal;
+    vec3 hitpos;
     float hit;
 };
 
@@ -93,56 +116,15 @@ float value(vec3 direction, vec3 normal)
 	float cosTheta = max(0.0f, dot(normal, direction));
 	return cosTheta / PI;
 }
-// 0.5, 0.75, 1.0 <- sky light
-vec3 computeIndirectLighting(vec3 pos, vec3 n, float sunIntensity)
-{
-    vec3 outLight = vec3(0.0);
-    uint seed = gl_LaunchIDEXT.x;
-    vec3 omega_i = CosHemisphereDirection(n, pos, seed);
-
-    // Clear payload to detect if it’s unchanged
-    diffusePayLoad.colour = vec3(0.0);
-    diffusePayLoad.normal = vec3(0.0);
-    diffusePayLoad.hit = -1.0;
-
-
-    traceRayEXT(
-        topLevelAS,
-        gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT,
-        0xFF,
-        1, // Hit group 1 (diffusehit.rchit.spv)
-        0,
-        1, // Miss index 1 (shadowmiss.rmiss.spv)
-        pos,
-        0.001,
-        omega_i,
-        10000,
-        2
-    );
-
-    if(diffusePayLoad.hit > 0.0) {
-        // Diffuse BRDF: albedo / PI
-        vec3 brdf = diffusePayLoad.colour / PI;
-        float L_intensity = sunIntensity;
-        float cosTheta = max(dot(diffusePayLoad.normal, omega_i), 0.0); // Use input normal for incident angle
-        float pdfValue = value(omega_i, diffusePayLoad.normal); // PDF based on input normal
-
-        if (pdfValue > 0.0001) { // Avoid division by zero
-            outLight = outLight + (brdf * L_intensity * cosTheta) / pdfValue;
-        }
-    } else
-    {
-        outLight += vec3(0.5, 0.75, 1.0);
-    }
-
-    return outLight; // Final color with albedo
+vec3 computeDirectLighting(vec3 worldPos, vec3 worldNormal, vec3 albedo, vec3 sunDirection, float sunIntensity, vec3 sunColor) {
+    vec3 L = normalize(sunDirection); // Sun is directional, not a point
+    float cosTheta = max(dot(worldNormal, L), 0.0);
+    vec3 brdf = albedo / PI; // Diffuse BRDF
+    return brdf * sunColor * sunIntensity * cosTheta;
 }
 
-vec3 computeDirectLighting(vec3 worldPos, vec3 worldNormal, vec3 albedo, vec3 sunDirection, float sunIntensity, vec3 sunColor) {
-    // Direction to the light
-    vec3 L = sunDirection;
-
-    // Shadow ray
+float CastShadowRay(vec3 pos, vec3 normal, vec3 lightDir) {
+    vec3 L = normalize(lightDir); // Directional light
     isShadowed = true;
     traceRayEXT(
         topLevelAS,
@@ -151,22 +133,76 @@ vec3 computeDirectLighting(vec3 worldPos, vec3 worldNormal, vec3 albedo, vec3 su
         1, // Hit group 1
         0,
         1, // Miss index 1 (shadowmiss.rmiss.spv)
-        worldPos + worldNormal * 0.001, // Offset to avoid self-intersection
+        pos + normal * 0.001,
         0.001,
         L,
-        10000.0, // Far distance for directional light
+        10000.0, // Large distance for directional light
         1
     );
-
-    // If not shadowed, compute direct lighting
-    if (!isShadowed) {
-        float cosTheta = max(dot(worldNormal, L), 0.0);
-        vec3 brdf = albedo / PI; // Diffuse BRDF
-        return brdf * sunColor * sunIntensity * cosTheta;
-    }
-    return vec3(0.0); // In shadow, no direct contribution
+    return isShadowed ? 0.0 : 1.0; // 1.0 if not shadowed, 0.0 if shadowed
 }
+// 0.5, 0.75, 1.0 <- sky light
+vec3 computeIndirectLighting(vec3 pos, vec3 n, vec3 sunDirection, float sunIntensity, vec3 sunColor) {
 
+    vec3 outLight = vec3(0.0);
+    uint seed = gl_LaunchIDEXT.x; // Add frame counter if needed
+    vec3 throughput = vec3(1.0);
+    int bounces = rtx.bounces;
+
+    diffusePayLoad.pos = pos;
+    diffusePayLoad.dir = CosHemisphereDirection(n, pos, seed);
+
+    for (int bounce = 0; bounce < bounces; bounce++) {
+        diffusePayLoad.hit = -1.0;
+        diffusePayLoad.colour = vec3(0.0);
+
+        traceRayEXT(
+            topLevelAS,
+            gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT,
+            0xFF,
+            1, // Diffuse hit group
+            0,
+            1, // Miss shader
+            diffusePayLoad.pos,
+            0.001,
+            diffusePayLoad.dir,
+            10000.0,
+            2
+        );
+
+        if (diffusePayLoad.hit > 0.0) {
+            vec3 brdf = diffusePayLoad.colour / PI;
+            float cosTheta = max(dot(diffusePayLoad.hitnormal, diffusePayLoad.dir), 0.0);
+            float pdf = cosTheta / PI;
+
+            if (pdf > 0.0001) {
+                throughput *= (brdf * cosTheta) / pdf; // No sunIntensity here
+
+                // Direct lighting at this bounce
+                vec3 directLight = computeDirectLighting(
+                    diffusePayLoad.hitpos,
+                    diffusePayLoad.hitnormal,
+                    diffusePayLoad.colour,
+                    sunDirection,
+                    sunIntensity,
+                    sunColor
+                );
+                float visibility = CastShadowRay(diffusePayLoad.hitpos, diffusePayLoad.hitnormal, sunDirection);
+                outLight += throughput * directLight * visibility;
+            }
+
+            if (bounce < bounces - 1) {
+                diffusePayLoad.pos = diffusePayLoad.hitpos;
+                diffusePayLoad.dir = CosHemisphereDirection(diffusePayLoad.hitnormal, diffusePayLoad.pos, seed + uint(bounce));
+            }
+        } else {
+            outLight += throughput;
+            break;
+        }
+    }
+
+    return outLight;
+}
 void main()
 {
 	const int primitiveID = gl_PrimitiveID;
@@ -200,13 +236,14 @@ void main()
 	vec3 objectNormal = normalize(cross(v1 - v0, v2 - v0));
 	vec3 worldNormal = normalize(vec3(objectNormal * gl_WorldToObjectEXT).xyz);
 
-    vec3 sunDirection = normalize(vec3(0.5, 20, 6.0));
-    float sunIntensity = 1.0;
+    // Compute direct lighting at the first hit
+    vec3 sunDirection = normalize(lightData.lights[0].LightPosition.xyz);
+    float sunIntensity = 100.0;
     vec3 sunColor = vec3(1.0, 0.95, 0.9);
     float sunAngularSize = 0.8;
 
-    // Compute direct lighting at the first hit
     vec3 directLight = computeDirectLighting(worldPos, worldNormal, albedo, sunDirection, sunIntensity, sunColor);
-    vec3 indirectLight = computeIndirectLighting(worldPos, worldNormal, sunIntensity);
-    rayPayLoad.colour = directLight + indirectLight * albedo;
+    float visibility = CastShadowRay(worldPos, worldNormal, sunDirection);
+    vec3 indirectLight = computeIndirectLighting(worldPos, worldNormal, sunDirection, sunIntensity, sunColor);
+    rayPayLoad.colour = directLight * visibility + indirectLight * albedo;
 }

@@ -5,15 +5,16 @@
 #include "Utils.hpp"
 #include "Buffer.hpp"
 #include "RenderPass.hpp"
+#include "ImGuiRenderer.hpp"
 
 /*
-	This pass will just take the forward pass shading image and present it 
+	This pass will just take the forward pass shading image and present it
 */
 
 vk::PresentPass::PresentPass(Context& context, Image& renderedScene) :
-	context{ context }, 
+	context{ context },
 	renderedScene{ renderedScene },
-	m_pipeline { VK_NULL_HANDLE}, 
+	m_pipeline { VK_NULL_HANDLE},
 	m_pipelineLayout{ VK_NULL_HANDLE },
 	m_renderType {renderType}
 {
@@ -99,6 +100,8 @@ void vk::PresentPass::Execute(VkCommandBuffer cmd, uint32_t imageIndex)
 	// Draw large triangle here
 	vkCmdDraw(cmd, 3, 1, 0, 0);
 
+	ImGuiRenderer::Render(cmd, context, imageIndex);
+
 	vkCmdEndRenderPass(cmd);
 
 #ifdef _DEBUG
@@ -109,7 +112,7 @@ void vk::PresentPass::Execute(VkCommandBuffer cmd, uint32_t imageIndex)
 void vk::PresentPass::CreatePipeline()
 {
 
-	// Create the pipeline 
+	// Create the pipeline
 	auto pipelineResult = vk::PipelineBuilder(context, PipelineType::GRAPHICS, VertexBinding::NONE, 0)
 		.AddShader("assets/shaders/fs_tri.vert.spv", ShaderType::VERTEX)
 		.AddShader("assets/shaders/present_pass.frag.spv", ShaderType::FRAGMENT)

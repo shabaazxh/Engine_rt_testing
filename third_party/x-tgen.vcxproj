@@ -56,7 +56,7 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;_SCL_SECURE_NO_WARNINGS=1;_DEBUG=1;GLM_FORCE_RADIANS=1;GLM_FORCE_SIZE_T_LENGTH=1;GLM_ENABLE_EXPERIMENTAL=1;ZSTD_DISABLE_ASM=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>volk\include;vulkan\include;stb\include;glfw\include;VulkanMemoryAllocator\include;glm\include;rapidobj\include;tgen\include;zstd\include;cgltf;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>volk\include;vulkan\include;stb\include;glfw\include;VulkanMemoryAllocator\include;glm\include;rapidobj\include;tgen\include;zstd\include;cgltf;imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
       <Optimization>Disabled</Optimization>
       <MinimalRebuild>false</MinimalRebuild>
@@ -75,7 +75,7 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;_SCL_SECURE_NO_WARNINGS=1;NDEBUG=1;GLM_FORCE_RADIANS=1;GLM_FORCE_SIZE_T_LENGTH=1;GLM_ENABLE_EXPERIMENTAL=1;ZSTD_DISABLE_ASM=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>volk\include;vulkan\include;stb\include;glfw\include;VulkanMemoryAllocator\include;glm\include;rapidobj\include;tgen\include;zstd\include;cgltf;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>volk\include;vulkan\include;stb\include;glfw\include;VulkanMemoryAllocator\include;glm\include;rapidobj\include;tgen\include;zstd\include;cgltf;imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <Optimization>Full</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>

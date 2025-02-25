@@ -42,5 +42,7 @@ namespace vk
 		std::unique_ptr<Buffer> RayGenShaderBindingTable;
 		std::unique_ptr<Buffer> MissShaderBindingTable;
 		std::unique_ptr<Buffer> HitShaderBindingTable;
+
+		std::vector<Buffer> m_rtxSettingsUBO;
 	};
 }

@@ -10,6 +10,7 @@ includedirs( "rapidobj/include" );
 includedirs( "tgen/include" );
 includedirs( "zstd/include" );
 includedirs( "cgltf");
+includedirs( "imgui/" )
 
 defines( "GLM_FORCE_RADIANS=1" )
 defines( "GLM_FORCE_SIZE_T_LENGTH=1" )
@@ -171,6 +172,10 @@ project( "x-cgltf" )
 
 	files( "cgltf/*.h" )
 
-project()
+project("x-imgui")
+	kind "Utility"
+	location "."
+	files( "imgui/*.h" )
+	files( "imgui/*.cpp")
 
 --EOF

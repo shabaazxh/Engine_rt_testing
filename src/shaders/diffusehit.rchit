@@ -55,8 +55,11 @@ layout(set = 0, binding = 2) uniform SceneUniform
 
 struct RayPayLoad
 {
+    vec3 pos;
+    vec3 dir;
     vec3 colour;
-    vec3 normal;
+    vec3 hitnormal;
+    vec3 hitpos;
     float hit;
 };
 
@@ -103,6 +106,7 @@ void main()
 	vec3 worldNormal = normalize(vec3(objectNormal * gl_WorldToObjectEXT).xyz);
 
 	diffusePayLoad.colour = albedo;
-	diffusePayLoad.normal = worldNormal;
+	diffusePayLoad.hitnormal = worldNormal;
+	diffusePayLoad.hitpos = worldPos;
 	diffusePayLoad.hit = 1.0f;
 }

@@ -18,8 +18,11 @@ layout(set = 0, binding = 2) uniform SceneUniform
 
 struct RayPayLoad
 {
+    vec3 pos;
+    vec3 dir;
     vec3 colour;
-    vec3 normal;
+    vec3 hitnormal;
+    vec3 hitpos;
     float hit;
 };
 
@@ -48,8 +51,10 @@ void main()
     float tmin = 0.001;
     float tmax = 10000.0;
 
+    rayPayLoad.pos = origin.xyz;
+    rayPayLoad.dir = direction.xyz;
     rayPayLoad.colour = vec3(0.0);
-    rayPayLoad.normal = vec3(0.0);
+    rayPayLoad.hitnormal = vec3(0.0);
     rayPayLoad.hit = -1.0f;
 
     // Seed for random sampling (based on pixel ID)
@@ -64,7 +69,7 @@ void main()
         vec4 target = inverse(ubo.projection) * vec4(jitteredD.x, jitteredD.y, 1, 1);
         vec4 direction = normalize(inverse(ubo.view) * vec4(normalize(target.xyz), 0));
 
-        traceRayEXT(topLevelAS, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0, origin.xyz, tmin, direction.xyz, tmax, 0);
+        traceRayEXT(topLevelAS, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0, rayPayLoad.pos, tmin, rayPayLoad.dir, tmax, 0);
 
         totalRadiance += rayPayLoad.colour;
     }

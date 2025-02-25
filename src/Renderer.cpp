@@ -2,6 +2,7 @@
 #include "Renderer.hpp"
 #include "Utils.hpp"
 #include "Light.hpp"
+#include "ImGuiRenderer.hpp"
 
 #include <glm/gtc/random.hpp>
 
@@ -104,12 +105,15 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	m_RayPass		= std::make_unique<RayPass>(context, m_scene, m_camera);
 	m_CompositePass = std::make_unique<Composite>(context, m_RayPass->GetRenderTarget(), m_ForwardPass->GetRenderTarget());
 	m_PresentPass   = std::make_unique<PresentPass>(context, m_CompositePass->GetRenderTarget());
+
+	ImGuiRenderer::Initialize(context);
 }
 
 void vk::Renderer::Destroy()
 {
 	vkDeviceWaitIdle(context.device);
 
+	ImGuiRenderer::Shutdown(context);
 	m_DepthPrepass.reset();
 	m_ForwardPass.reset();
 	m_ShadowMap.reset();
@@ -332,6 +336,8 @@ void vk::Renderer::Present(uint32_t imageIndex)
 		m_CompositePass->Resize();
 		m_PresentPass->Resize();
 	}
+
+	frameNumber += 1;
 }
 
 void vk::Renderer::Update(double deltaTime)
@@ -339,6 +345,8 @@ void vk::Renderer::Update(double deltaTime)
 	m_camera->Update(context.window, context.extent.width, context.extent.height, deltaTime);
 	m_scene->Update(context.window);
 
+	ImGuiRenderer::Update(m_scene, m_camera);
+	m_RayPass->Update();
 	// Update passes
 	m_ShadowMap->Update();
 	m_ForwardPass->Update();

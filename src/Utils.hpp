@@ -74,12 +74,19 @@ namespace vk
 		float offsets[22];
 	};
 
+	struct RTX
+	{
+		int bounces;
+		int frameIndex;
+	};
+
 	inline PostProcessing postProcessSettings = {};
 	inline double deltaTime;
 	inline uint32_t setRenderingPipeline = 1;
 	inline uint32_t setAlphaMakingPipeline = 2;
-
+	inline RTX rtxSettings = { 1, 0 };
 	inline VkDescriptorSetLayout materialDescriptorSetLayout;
+	inline uint32_t frameNumber = 0;
 }
 
 namespace vk
