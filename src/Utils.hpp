@@ -84,7 +84,7 @@ namespace vk
 	inline double deltaTime;
 	inline uint32_t setRenderingPipeline = 1;
 	inline uint32_t setAlphaMakingPipeline = 2;
-	inline RTX rtxSettings = { 1, 0 };
+	inline RTX rtxSettings = { 2, 0 };
 	inline VkDescriptorSetLayout materialDescriptorSetLayout;
 	inline uint32_t frameNumber = 0;
 }

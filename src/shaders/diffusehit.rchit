@@ -108,5 +108,5 @@ void main()
 	diffusePayLoad.colour = albedo;
 	diffusePayLoad.hitnormal = worldNormal;
 	diffusePayLoad.hitpos = worldPos;
-	diffusePayLoad.hit = 1.0f;
+	diffusePayLoad.hit = 1.0;
 }
