@@ -171,6 +171,26 @@ vec3 computeIndirectLighting(vec3 pos, vec3 n, vec3 albedo, vec3 sunDirection, f
         float visibility = CastShadowRay(pos, n, sunDirection);
         radiance += throughput * directLight * visibility;
 
+        for(int i = 1; i < NUM_LIGHTS - 1; i++)
+        {
+            vec3 lightDir = normalize(lightData.lights[i].LightPosition.xyz - pos);
+            float dist = length(lightData.lights[i].LightPosition.xyz - pos);
+            float att = 1.0 / (dist * dist); // Tune 0.1 and 0.01
+            vec3 LightColour = lightData.lights[i].LightColour.xyz * att;
+
+            directLight = computeDirectLighting(
+                pos,
+                n,
+                albedo,
+                lightDir,
+                1000.0,
+                LightColour
+            );
+
+            //float visibility = CastShadowRay(pos, n, lightDir);
+            radiance += throughput * directLight;
+        }
+
         if (bounce == bounces - 1) {
             break;
         }
