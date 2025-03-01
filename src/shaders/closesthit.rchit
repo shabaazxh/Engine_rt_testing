@@ -311,10 +311,10 @@ void main()
 
     // Compute direct lighting at the first hit
     vec3 sunDirection = normalize(vec3(0.0, 1.0, 0.5)); //.5 for z
-    float sunIntensity = 1.0;
+    float sunIntensity = 100.0;
     vec3 sunColor = vec3(1.0, 0.95, 0.9);
     float sunAngularSize = 0.8;
 
     vec3 indirectLight = computeIndirectLighting(worldPos, worldNormal, albedo, sunDirection, sunIntensity, sunColor);
-    rayPayLoad.colour = indirectLight;
+    rayPayLoad.colour = indirectLight * albedo;
 }

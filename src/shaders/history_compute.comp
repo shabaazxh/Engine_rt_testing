@@ -1,0 +1,29 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(set = 0, binding = 0) uniform sampler2D renderedScene;       // Current noisy SSGI
+layout(set = 0, binding = 1, rgba16f) uniform image2D temporalAccumImage; // History buffer (read/write)
+
+void main() {
+
+    vec2 resolution = vec2(1280, 720);
+    ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+
+    // Bounds check
+    if (coords.x >= resolution.x || coords.y >= resolution.y) {
+        return;
+    }
+
+    // Current frame’s noisy SSGI result
+    vec4 newColour = texelFetch(renderedScene, coords, 0);
+
+    // Load history at the same coordinates (no reprojection)
+    vec4 history = imageLoad(temporalAccumImage, coords);
+
+    // Temporal blend (exponential moving average)
+    float alpha = 0.1; // e.g., 0.1
+    vec3 combined = mix(history.rgb, newColour.rgb, alpha);
+
+    // Write to history buffer
+    imageStore(temporalAccumImage, coords, vec4(combined, 1.0));
+}

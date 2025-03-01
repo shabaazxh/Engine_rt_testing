@@ -105,15 +105,17 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	m_ForwardPass   = std::make_unique<ForwardPass>(context, m_ShadowMap->GetRenderTarget(), m_DepthPrepass->GetRenderTarget(), m_scene, m_camera);
 	m_RayPass		= std::make_unique<RayPass>(context, m_scene, m_camera);
 	m_HistoryPass   = std::make_unique<History>(context, m_RayPass->GetRenderTarget());
-	m_CompositePass = std::make_unique<Composite>(context, m_RayPass->GetRenderTarget(), m_ForwardPass->GetRenderTarget(), m_HistoryPass->GetHistoryImages());
+	m_CompositePass = std::make_unique<Composite>(context, m_RayPass->GetRenderTarget(), m_HistoryPass->GetRenderTarget(), m_HistoryPass->GetHistoryImages());
 	m_PresentPass   = std::make_unique<PresentPass>(context, m_CompositePass->GetRenderTarget(), m_RayPass->GetRenderTarget());
 
 	ImGuiRenderer::Initialize(context);
-	ImGuiRenderer::AddTexture(clampToEdgeSamplerAniso, m_HistoryPass->GetHistoryImages()[0].imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	ImGuiRenderer::AddTexture(clampToEdgeSamplerAniso, m_HistoryPass->GetHistoryImages()[1].imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	ImGuiRenderer::AddTexture(clampToEdgeSamplerAniso, m_HistoryPass->GetHistoryImages()[2].imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	ImGuiRenderer::AddTexture(clampToEdgeSamplerAniso, m_HistoryPass->GetHistoryImages()[3].imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	ImGuiRenderer::AddTexture(clampToEdgeSamplerAniso, m_HistoryPass->GetHistoryImages()[4].imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	ImGuiRenderer::AddTexture(clampToEdgeSamplerAniso, m_HistoryPass->GetRenderTarget().imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+	//ImGuiRenderer::AddTexture(clampToEdgeSamplerAniso, m_HistoryPass->GetHistoryImages()[0].imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	//ImGuiRenderer::AddTexture(clampToEdgeSamplerAniso, m_HistoryPass->GetHistoryImages()[1].imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	//ImGuiRenderer::AddTexture(clampToEdgeSamplerAniso, m_HistoryPass->GetHistoryImages()[2].imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	//ImGuiRenderer::AddTexture(clampToEdgeSamplerAniso, m_HistoryPass->GetHistoryImages()[3].imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	//ImGuiRenderer::AddTexture(clampToEdgeSamplerAniso, m_HistoryPass->GetHistoryImages()[4].imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 void vk::Renderer::Destroy()

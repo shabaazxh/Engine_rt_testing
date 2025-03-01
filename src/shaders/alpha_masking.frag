@@ -35,7 +35,7 @@ layout(location = 0) out vec4 fragColor;
 //layout(push_constant) uniform Push
 //{
 //	mat4 ModelMatrix;
-//	uint dTextureID; // diffuse 
+//	uint dTextureID; // diffuse
 //	uint mTextureID; // metalness
 //	uint rTextureID; // roughness
 //    uint eTextureID; // emissive
@@ -115,7 +115,7 @@ void main()
 {
 //    vec4 color = vec4(0.0);
 //    color = texture(sampler2D(textures[pc.dTextureID], samplerAnisotropic), uv);
-//    
+//
 //    // Alpha is less than some threshold ? Discard the fragment
 //    if(color.a < 0.1)
 //    {
@@ -126,14 +126,14 @@ void main()
 //    vec3 lightDir = normalize(lightData.lights[0].LightPosition.xyz - WorldPos.xyz);
 //    vec3 viewDir = normalize(ubo.cameraPosition.xyz - WorldPos.xyz);
 //    vec3 halfVector = normalize(viewDir + lightDir);
-//        
+//
 //    // == Metal and Roughness ==
 //    float roughness = texture(sampler2D(textures[pc.rTextureID], samplerAnisotropic), uv).x;
 //    float metallic = texture(sampler2D(textures[pc.mTextureID], samplerAnisotropic), uv).x;
 //
 //    vec3 outLight = CookTorranceBRDF(wNormal, halfVector, viewDir, lightDir, metallic, roughness, color.xyz);
 //
-    
+
 	fragColor = vec4(1,1,1,1);
-	
+
 }
