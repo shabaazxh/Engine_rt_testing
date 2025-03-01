@@ -39,7 +39,7 @@ vk::RayPass::RayPass(Context& context, std::shared_ptr<Scene>& scene, std::share
 		context,
 		context.extent.width,
 		context.extent.height,
-		VK_FORMAT_R16G16B16A16_SFLOAT,
+		VK_FORMAT_R32G32B32A32_SFLOAT,
 		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 		VK_IMAGE_ASPECT_COLOR_BIT,
 		1
@@ -50,7 +50,7 @@ vk::RayPass::RayPass(Context& context, std::shared_ptr<Scene>& scene, std::share
 		ImageTransition(
 			cmd,
 			m_RenderTarget.image,
-			VK_FORMAT_R16G16B16A16_SFLOAT,
+			VK_FORMAT_R32G32B32A32_SFLOAT,
 			VK_IMAGE_LAYOUT_UNDEFINED,
 			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0,
 			VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
@@ -90,7 +90,7 @@ void vk::RayPass::Resize()
 		context,
 		context.extent.width,
 		context.extent.height,
-		VK_FORMAT_R16G16B16A16_SFLOAT,
+		VK_FORMAT_R32G32B32A32_SFLOAT,
 		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 		VK_IMAGE_ASPECT_COLOR_BIT,
 		1
@@ -101,7 +101,7 @@ void vk::RayPass::Resize()
 		ImageTransition(
 			cmd,
 			m_RenderTarget.image,
-			VK_FORMAT_R16G16B16A16_SFLOAT,
+			VK_FORMAT_R32G32B32A32_SFLOAT,
 			VK_IMAGE_LAYOUT_UNDEFINED,
 			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0,
 			VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
@@ -147,7 +147,7 @@ void vk::RayPass::Execute(VkCommandBuffer cmd)
 	ImageTransition(
 		cmd,
 		m_RenderTarget.image,
-		VK_FORMAT_R16G16B16A16_SFLOAT,
+		VK_FORMAT_R32G32B32A32_SFLOAT,
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
 		VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
 		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR
@@ -177,7 +177,7 @@ void vk::RayPass::Execute(VkCommandBuffer cmd)
 	ImageTransition(
 		cmd,
 		m_RenderTarget.image,
-		VK_FORMAT_R16G16B16A16_SFLOAT,
+		VK_FORMAT_R32G32B32A32_SFLOAT,
 		VK_IMAGE_LAYOUT_GENERAL,
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
@@ -192,7 +192,7 @@ void vk::RayPass::Execute(VkCommandBuffer cmd)
 void vk::RayPass::Update()
 {
 	rtxSettings.bounces = rtxSettings.bounces;
-	rtxSettings.frameIndex = frameNumber;
+	rtxSettings.frameIndex = (frameNumber);
 	m_rtxSettingsUBO[currentFrame].WriteToBuffer(&rtxSettings, sizeof(RTX));
 }
 

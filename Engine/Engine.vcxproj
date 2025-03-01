@@ -103,6 +103,7 @@
     <ClInclude Include="..\src\Engine.hpp" />
     <ClInclude Include="..\src\ForwardPass.hpp" />
     <ClInclude Include="..\src\GLTF.hpp" />
+    <ClInclude Include="..\src\History.hpp" />
     <ClInclude Include="..\src\ImGuiRenderer.hpp" />
     <ClInclude Include="..\src\Image.hpp" />
     <ClInclude Include="..\src\Light.hpp" />
@@ -132,6 +133,7 @@
     <ClCompile Include="..\src\Engine.cpp" />
     <ClCompile Include="..\src\ForwardPass.cpp" />
     <ClCompile Include="..\src\GLTF.cpp" />
+    <ClCompile Include="..\src\History.cpp" />
     <ClCompile Include="..\src\ImGuiRenderer.cpp" />
     <ClCompile Include="..\src\Image.cpp" />
     <ClCompile Include="..\src\PresentPass.cpp" />

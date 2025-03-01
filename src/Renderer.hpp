@@ -12,6 +12,7 @@
 #include "ShadowMap.hpp"
 #include "Composite.hpp"
 #include "RayPass.hpp"
+#include "History.hpp"
 
 namespace vk
 {
@@ -27,11 +28,11 @@ namespace vk
 		void Render();
 		void Update(double deltaTime);
 
-		// Should be moved out of renderer when we do better input/controls 
+		// Should be moved out of renderer when we do better input/controls
 		static void glfwHandleKeyboard(GLFWwindow* window, int key, int scancode, int action, int mods);
 		static void glfwMouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 		static void glfwCallbackMotion(GLFWwindow* window, double x, double y);
-		
+
 	private:
 		void CreateResources();
 		void CreateFences();
@@ -58,6 +59,7 @@ namespace vk
 		std::unique_ptr<Composite>        m_CompositePass;
 		std::unique_ptr<PresentPass>	  m_PresentPass;
 		std::unique_ptr<RayPass>          m_RayPass;
+		std::unique_ptr<History>          m_HistoryPass;
 		std::shared_ptr<Camera> m_camera;
 		MaterialManager m_materialManager;
 	};

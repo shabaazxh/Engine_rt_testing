@@ -97,6 +97,13 @@
       <Outputs>../../assets/shaders/fs_tri.vert.spv</Outputs>
       <Message>GLSLC: [VERT] '%(Filename)%(Extension)'</Message>
     </CustomBuild>
+    <CustomBuild Include="..\..\src\shaders\history.frag">
+      <FileType>Document</FileType>
+      <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+      <Outputs>../../assets/shaders/history.frag.spv</Outputs>
+      <Message>GLSLC: [FRAG] '%(Filename)%(Extension)'</Message>
+    </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\miss.rmiss">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")

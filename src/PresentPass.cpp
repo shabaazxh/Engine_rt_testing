@@ -11,9 +11,10 @@
 	This pass will just take the forward pass shading image and present it
 */
 
-vk::PresentPass::PresentPass(Context& context, Image& renderedScene) :
+vk::PresentPass::PresentPass(Context& context, Image& renderedScene, const Image& nonTemporalRenderedScene) :
 	context{ context },
 	renderedScene{ renderedScene },
+	nonTemporalRenderedScene{nonTemporalRenderedScene},
 	m_pipeline { VK_NULL_HANDLE},
 	m_pipelineLayout{ VK_NULL_HANDLE },
 	m_renderType {renderType}
@@ -137,7 +138,8 @@ void vk::PresentPass::BuildDescriptors()
 	// Set = 0, binding 0 = rendered scene image
 	std::vector<VkDescriptorSetLayoutBinding> bindings = {
 		CreateDescriptorBinding(0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT),
-		CreateDescriptorBinding(1, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+		CreateDescriptorBinding(1, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
+		CreateDescriptorBinding(2, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
 	};
 
 	m_descriptorSetLayout = CreateDescriptorSetLayout(context, bindings);
@@ -165,5 +167,18 @@ void vk::PresentPass::BuildDescriptors()
 
 		UpdateDescriptorSet(context, 1, imgInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 	}
+
+
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		VkDescriptorImageInfo imgInfo = {
+			.sampler = repeatSampler,
+			.imageView = nonTemporalRenderedScene.imageView,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+
+		UpdateDescriptorSet(context, 2, imgInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	}
+
 }
 

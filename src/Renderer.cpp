@@ -104,10 +104,16 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	m_DepthPrepass  = std::make_unique<DepthPrepass>(context, m_scene, m_camera);
 	m_ForwardPass   = std::make_unique<ForwardPass>(context, m_ShadowMap->GetRenderTarget(), m_DepthPrepass->GetRenderTarget(), m_scene, m_camera);
 	m_RayPass		= std::make_unique<RayPass>(context, m_scene, m_camera);
-	m_CompositePass = std::make_unique<Composite>(context, m_RayPass->GetRenderTarget(), m_ForwardPass->GetRenderTarget());
-	m_PresentPass   = std::make_unique<PresentPass>(context, m_CompositePass->GetRenderTarget());
+	m_HistoryPass   = std::make_unique<History>(context, m_RayPass->GetRenderTarget());
+	m_CompositePass = std::make_unique<Composite>(context, m_RayPass->GetRenderTarget(), m_ForwardPass->GetRenderTarget(), m_HistoryPass->GetHistoryImages());
+	m_PresentPass   = std::make_unique<PresentPass>(context, m_CompositePass->GetRenderTarget(), m_RayPass->GetRenderTarget());
 
 	ImGuiRenderer::Initialize(context);
+	ImGuiRenderer::AddTexture(clampToEdgeSamplerAniso, m_HistoryPass->GetHistoryImages()[0].imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	ImGuiRenderer::AddTexture(clampToEdgeSamplerAniso, m_HistoryPass->GetHistoryImages()[1].imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	ImGuiRenderer::AddTexture(clampToEdgeSamplerAniso, m_HistoryPass->GetHistoryImages()[2].imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	ImGuiRenderer::AddTexture(clampToEdgeSamplerAniso, m_HistoryPass->GetHistoryImages()[3].imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	ImGuiRenderer::AddTexture(clampToEdgeSamplerAniso, m_HistoryPass->GetHistoryImages()[4].imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 void vk::Renderer::Destroy()
@@ -123,6 +129,7 @@ void vk::Renderer::Destroy()
 	m_camera.reset();
 	m_scene->Destroy();
 	m_RayPass.reset();
+	m_HistoryPass.reset();
 
 	vkDestroySampler(context.device, repeatSamplerAniso, nullptr);
 	vkDestroySampler(context.device, repeatSampler, nullptr);
@@ -273,11 +280,13 @@ void vk::Renderer::Render()
 		VK_CHECK(vkBeginCommandBuffer(cmd, &beginInfo), "Failed to begin command buffer");
 
 		m_RayPass->Execute(cmd);
+		m_HistoryPass->Execute(cmd);
 		m_ShadowMap->Execute(cmd);
 		m_DepthPrepass->Execute(cmd);
 		m_ForwardPass->Execute(cmd);
 		m_CompositePass->Execute(cmd);
 		m_PresentPass->Execute(cmd, index);
+
 
 		vkEndCommandBuffer(cmd);
 	}
@@ -405,7 +414,7 @@ void vk::Renderer::glfwHandleKeyboard(GLFWwindow* window, int key, int scancode,
 	{
 		postProcessSettings.Enable = postProcessSettings.Enable == true ? false : true;
 		const std::string result = postProcessSettings.Enable == true ? "Enabled" : "Disabled";
-		std::cout << "Post process: " << result << std::endl;
+		std::cout << "Temporal: " << result << std::endl;
 	}
 }
 

@@ -10,19 +10,6 @@ struct Light
 	mat4 LightSpaceMatrix;
 };
 
-const int NUM_LIGHTS = 26;
-
-layout(set = 0, binding = 8) uniform LightBuffer {
-	Light lights[NUM_LIGHTS];
-} lightData;
-
-layout(set = 0, binding = 9) uniform RTXSettings
-{
-    int bounces;
-    int frameIndex;
-} rtx;
-
-
 layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
 
 #define PI 3.14159265359
@@ -37,6 +24,18 @@ struct VertexData {
 struct Material{
 	uint albedoIndex;
 };
+
+layout(set = 0, binding = 2) uniform SceneUniform
+{
+	mat4 model;
+	mat4 view;
+	mat4 projection;
+    vec4 cameraPosition;
+    vec2 viewportSize;
+	float fov;
+	float nearPlane;
+	float farPlane;
+} ubo;
 
 layout(set = 0, binding = 3, scalar) readonly buffer VertexBuffer {
 
@@ -59,17 +58,18 @@ layout(set = 0, binding = 6, scalar) readonly buffer MaterialBuffer {
 
 layout(set = 0, binding = 7) uniform sampler2D textures[300];
 
-layout(set = 0, binding = 2) uniform SceneUniform
+const int NUM_LIGHTS = 26;
+
+layout(set = 0, binding = 8) uniform LightBuffer {
+	Light lights[NUM_LIGHTS];
+} lightData;
+
+layout(set = 0, binding = 9) uniform RTXSettings
 {
-	mat4 model;
-	mat4 view;
-	mat4 projection;
-    vec4 cameraPosition;
-    vec2 viewportSize;
-	float fov;
-	float nearPlane;
-	float farPlane;
-} ubo;
+    int bounces;
+    int frameIndex;
+} rtx;
+
 
 struct RayPayLoad
 {
@@ -92,10 +92,43 @@ float hash(vec3 p, float seed) {
     return fract(sin(dot(p + seed, vec3(12.9898, 78.233, 45.5432))) * 43758.5453);
 }
 
-vec3 CosHemisphereDirection(vec3 n, vec3 pos, float seed) {
+// Reference: https://github.com/NVIDIAGameWorks/RTXGI-DDGI/blob/main/samples/test-harness/shaders/include/Random.hlsl#L42
+uint WangHash(uint seed)
+{
+    seed = (seed ^ 61) ^ (seed >> 16);
+    seed *= 9;
+    seed = seed ^ (seed >> 4);
+    seed *= 0x27d4eb2d;
+    seed = seed ^ (seed >> 15);
+    return seed;
+}
+
+uint Xorshift(uint seed)
+{
+    // Xorshift algorithm from George Marsaglia's paper
+    seed ^= (seed << 13);
+    seed ^= (seed >> 17);
+    seed ^= (seed << 5);
+    return seed;
+}
+
+float GetRandomNumber(inout uint seed)
+{
+    seed = WangHash(seed);
+    return float(Xorshift(seed)) * (1.f / 4294967296.f);
+}
+
+vec2 GetRandomHashValue(inout uint seed)
+{
+    float u = GetRandomNumber(seed) * 2.0 - 1.0;
+    float v = GetRandomNumber(seed) * 2.0 - 1.0; // Seed is modified in-place
+    return vec2(u, v);
+}
+
+vec3 CosHemisphereDirection(vec3 n, vec3 pos, inout uint seed) {
     // Generate two random numbers
-    float r1 = hash(pos, seed);
-    float r2 = hash(pos + vec3(1.0, 2.0, 3.0), seed); // Offset to get a different value
+    float r1 = GetRandomNumber(seed);
+    float r2 = GetRandomNumber(seed); // Offset to get a different value
 
     // Cosine-weighted sampling
     float theta = 2.0 * 3.14159265359 * r1;  // Azimuthal angle
@@ -149,15 +182,15 @@ float CastShadowRay(vec3 pos, vec3 normal, vec3 lightDir) {
 vec3 computeIndirectLighting(vec3 pos, vec3 n, vec3 albedo, vec3 sunDirection, float sunIntensity, vec3 sunColor) {
 
     vec3 radiance = vec3(0.0);
-    float seed = gl_LaunchIDEXT.x;
+    uint seed = uint(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x) + gl_LaunchIDEXT.x;
+    seed *= rtx.frameIndex;
+
     vec3 throughput = vec3(1.0);
 
-    // Payload setup for initial point
-    int bounces = 2;
+    int bounces = rtx.bounces;
 
-    // Bounce loop for direct and indirect lighting
-    for (int bounce = 0; bounce < bounces; bounce++) {
-
+    for (int bounce = 0; bounce < bounces; bounce++)
+    {
         // Compute direct lighting at the current hit point
         vec3 directLight = computeDirectLighting(
             pos,
@@ -171,25 +204,25 @@ vec3 computeIndirectLighting(vec3 pos, vec3 n, vec3 albedo, vec3 sunDirection, f
         float visibility = CastShadowRay(pos, n, sunDirection);
         radiance += throughput * directLight * visibility;
 
-        for(int i = 1; i < NUM_LIGHTS - 1; i++)
-        {
-            vec3 lightDir = normalize(lightData.lights[i].LightPosition.xyz - pos);
-            float dist = length(lightData.lights[i].LightPosition.xyz - pos);
-            float att = 1.0 / (dist * dist); // Tune 0.1 and 0.01
-            vec3 LightColour = lightData.lights[i].LightColour.xyz * att;
-
-            directLight = computeDirectLighting(
-                pos,
-                n,
-                albedo,
-                lightDir,
-                1000.0,
-                LightColour
-            );
-
-            //float visibility = CastShadowRay(pos, n, lightDir);
-            radiance += throughput * directLight;
-        }
+//        for(int i = 1; i < NUM_LIGHTS - 1; i++)
+//        {
+//            vec3 lightDir = normalize(lightData.lights[i].LightPosition.xyz - pos);
+//            float dist = length(lightData.lights[i].LightPosition.xyz - pos);
+//            float att = 1.0 / (dist * dist); // Tune 0.1 and 0.01
+//            vec3 LightColour = lightData.lights[i].LightColour.xyz * att;
+//
+//            directLight = computeDirectLighting(
+//                pos,
+//                n,
+//                albedo,
+//                lightDir,
+//                1000.0,
+//                LightColour
+//            );
+//
+//            //float visibility = CastShadowRay(pos, n, lightDir);
+//            radiance += throughput * directLight;
+//        }
 
         if (bounce == bounces - 1) {
             break;
@@ -226,7 +259,7 @@ vec3 computeIndirectLighting(vec3 pos, vec3 n, vec3 albedo, vec3 sunDirection, f
             float cosTheta = max(dot(diffusePayLoad.hitnormal, omega_i), 0.0);
             float pdf = cosTheta / PI; // Cosine-weighted PDF
 
-            if (pdf > 0.0001) {
+            if (pdf > 0.001) {
                 radiance += throughput *= (brdf * cosTheta) / pdf; // Update throughput for next bounce
             }
 
@@ -235,14 +268,14 @@ vec3 computeIndirectLighting(vec3 pos, vec3 n, vec3 albedo, vec3 sunDirection, f
             albedo = diffusePayLoad.colour;
 
         } else {
-            // Ray missed, add sky contribution and stop
+            // ray missed
             radiance += throughput * vec3(0.5, 0.75, 1.0); // Sky color
             break;
         }
     }
 
     return radiance;
-}
+    }
 void main()
 {
 	const int primitiveID = gl_PrimitiveID;
@@ -277,11 +310,11 @@ void main()
 	vec3 worldNormal = normalize(vec3(objectNormal * gl_WorldToObjectEXT).xyz);
 
     // Compute direct lighting at the first hit
-    vec3 sunDirection = normalize(lightData.lights[0].LightPosition.xyz);
-    float sunIntensity = 100.0;
+    vec3 sunDirection = normalize(vec3(0.0, 1.0, 0.5)); //.5 for z
+    float sunIntensity = 1.0;
     vec3 sunColor = vec3(1.0, 0.95, 0.9);
     float sunAngularSize = 0.8;
 
     vec3 indirectLight = computeIndirectLighting(worldPos, worldNormal, albedo, sunDirection, sunIntensity, sunColor);
-    rayPayLoad.colour = indirectLight * albedo;
+    rayPayLoad.colour = indirectLight;
 }

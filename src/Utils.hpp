@@ -76,8 +76,8 @@ namespace vk
 
 	struct RTX
 	{
-		int bounces;
-		int frameIndex;
+		alignas(4) int bounces;
+		alignas(4) int frameIndex;
 	};
 
 	inline PostProcessing postProcessSettings = {};

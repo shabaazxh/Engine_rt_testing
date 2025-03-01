@@ -86,6 +86,19 @@ void vk::ImGuiRenderer::Update(const std::shared_ptr<Scene>& scene, const std::s
             }
         }
     }
+
+    static bool enableTextureDebug = false;
+    ImGui::Checkbox("Debug Textures", &enableTextureDebug);
+    if (enableTextureDebug)
+    {
+        ImGui::Begin("Debug Textures");
+        for (size_t i = 0; i < textureIDs.size(); ++i) {
+            ImGui::Image(textureIDs[i], ImVec2(400, 400));
+        }
+        ImGui::End();
+    }
+
+
     ImGui::EndChild();
 }
 

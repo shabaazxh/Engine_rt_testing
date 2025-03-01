@@ -13,7 +13,7 @@ namespace vk
 	{
 	public:
 
-		PresentPass(Context& context, Image& renderedScene);
+		PresentPass(Context& context, Image& renderedScene, const Image& nonTemporalRenderedScene);
 		~PresentPass();
 		void Execute(VkCommandBuffer cmd, uint32_t imageIndex);
 		void Update();
@@ -24,6 +24,8 @@ namespace vk
 
 		Context& context;
 		Image& renderedScene;
+		const Image& nonTemporalRenderedScene;
+
 		std::shared_ptr<Scene> scene;
 		std::shared_ptr<Camera> camera;
 

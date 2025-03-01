@@ -36,6 +36,9 @@
     <ClInclude Include="..\src\GLTF.hpp">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\History.hpp">
+      <Filter>src</Filter>
+    </ClInclude>
     <ClInclude Include="..\src\ImGuiRenderer.hpp">
       <Filter>src</Filter>
     </ClInclude>
@@ -117,6 +120,9 @@
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="..\src\GLTF.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\History.cpp">
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="..\src\ImGuiRenderer.cpp">

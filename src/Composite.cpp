@@ -5,10 +5,11 @@
 #include "Buffer.hpp"
 #include "RenderPass.hpp"
 
-vk::Composite::Composite(Context& context, Image& LightingPass, Image& BloomPass) :
+vk::Composite::Composite(Context& context, Image& LightingPass, Image& BloomPass, const std::vector<Image>& historyImages) :
 	context{ context },
 	LightingPass{ LightingPass },
 	BloomPass{ BloomPass },
+	historyImages{historyImages},
 	m_Pipeline{ VK_NULL_HANDLE },
 	m_PipelineLayout{ VK_NULL_HANDLE },
 	m_descriptorSetLayout{ VK_NULL_HANDLE },
@@ -26,7 +27,7 @@ vk::Composite::Composite(Context& context, Image& LightingPass, Image& BloomPass
 		context,
 		context.extent.width,
 		context.extent.height,
-		VK_FORMAT_R16G16B16A16_SFLOAT,
+		VK_FORMAT_R32G32B32A32_SFLOAT,
 		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 		VK_IMAGE_ASPECT_COLOR_BIT,
 		1
@@ -64,7 +65,7 @@ void vk::Composite::Resize()
 		context,
 		context.extent.width,
 		context.extent.height,
-		VK_FORMAT_R16G16B16A16_SFLOAT,
+		VK_FORMAT_R32G32B32A32_SFLOAT,
 		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 		VK_IMAGE_ASPECT_COLOR_BIT,
 		1
@@ -151,7 +152,7 @@ void vk::Composite::Update()
 
 void vk::Composite::CreatePipeline()
 {
-	// Create the pipeline 
+	// Create the pipeline
 	auto pipelineResult = vk::PipelineBuilder(context, PipelineType::GRAPHICS, VertexBinding::NONE, 0)
 		.AddShader("assets/shaders/fs_tri.vert.spv", ShaderType::VERTEX)
 		.AddShader("assets/shaders/composite.frag.spv", ShaderType::FRAGMENT)
@@ -174,12 +175,12 @@ void vk::Composite::CreateRenderPass()
 	RenderPass builder(context.device, 1);
 
 	m_renderPass = builder
-		.AddAttachment(VK_FORMAT_R16G16B16A16_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+		.AddAttachment(VK_FORMAT_R32G32B32A32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 		.AddColorAttachmentRef(0, 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
-		// External -> 0 : Color 
+		// External -> 0 : Color
 		.AddDependency(VK_SUBPASS_EXTERNAL, 0, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_DEPENDENCY_BY_REGION_BIT)
 
-		// 0 -> External : Color : Wait for color writing to finish on the attachment before the fragment shader tries to read from it 
+		// 0 -> External : Color : Wait for color writing to finish on the attachment before the fragment shader tries to read from it
 		.AddDependency(0, VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT, VK_DEPENDENCY_BY_REGION_BIT)
 		.Build();
 
@@ -212,6 +213,7 @@ void vk::Composite::BuildDescriptors()
 		std::vector<VkDescriptorSetLayoutBinding> bindings = {
 			CreateDescriptorBinding(0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
 			CreateDescriptorBinding(1, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
+			CreateDescriptorBinding(2, 5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
 		};
 
 		m_descriptorSetLayout = CreateDescriptorSetLayout(context, bindings);
@@ -241,5 +243,19 @@ void vk::Composite::BuildDescriptors()
 		};
 
 		UpdateDescriptorSet(context, 1, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	}
+
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		for (size_t image = 0; image < historyImages.size(); image++)
+		{
+			VkDescriptorImageInfo imgInfo = {
+				.sampler = repeatSampler,
+				.imageView = historyImages[image].imageView,
+				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL // VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			};
+
+			UpdateDescriptorSet(context, 2, imgInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		}
 	}
 }
