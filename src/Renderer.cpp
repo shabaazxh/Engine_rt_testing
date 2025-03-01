@@ -359,6 +359,7 @@ void vk::Renderer::Update(double deltaTime)
 
 	ImGuiRenderer::Update(m_scene, m_camera);
 	m_RayPass->Update();
+	m_HistoryPass->Update();
 	// Update passes
 	m_ShadowMap->Update();
 	m_ForwardPass->Update();
@@ -417,6 +418,8 @@ void vk::Renderer::glfwHandleKeyboard(GLFWwindow* window, int key, int scancode,
 		postProcessSettings.Enable = postProcessSettings.Enable == true ? false : true;
 		const std::string result = postProcessSettings.Enable == true ? "Enabled" : "Disabled";
 		std::cout << "Temporal: " << result << std::endl;
+
+		isAccumulating = postProcessSettings.Enable == true ? true : false;
 	}
 }
 

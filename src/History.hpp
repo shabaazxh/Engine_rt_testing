@@ -18,7 +18,7 @@ namespace vk
 		Image& GetRenderTarget() { return m_RenderTarget; }
 
 		void Destroy();
-
+		void Update();
 	private:
 		void CreatePipeline();
 		void CreateRenderPass();
@@ -44,5 +44,7 @@ namespace vk
 		VkPipelineLayout m_pipelineLayout;
 		VkDescriptorSetLayout m_descriptorSetLayout;
 		std::vector<VkDescriptorSet> m_descriptorSets;
+		std::vector<Buffer> m_rtxSettingsUBO;
+		uint32_t accNumber;
 	};
 }

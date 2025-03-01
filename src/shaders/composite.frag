@@ -18,11 +18,14 @@ void main()
 		historyBlend += texture(historyImages[i], uv); // Blend in each newer frame
 	}
 
-	color = mix(color, historyBlend, 0.8);
+	//color = mix(color, historyBlend, 0.8);
 
-	vec3 temp = texture(TemporalAccumHistory, uv).rgb;
-	color.rgb = temp;
+	vec4 temp = texture(TemporalAccumHistory, uv).rgba;
+	color = temp;
+
 	vec3 ldrColor = color.rgb / (color.rgb + vec3(1.0));
 	vec3 gammaCorrectedColor = pow(ldrColor, vec3(1.0 / 2.2));
+
+	gammaCorrectedColor = clamp(gammaCorrectedColor, 0.0, 1.0);
 	fragColor = vec4(vec3(gammaCorrectedColor), 1.0);
 }

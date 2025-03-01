@@ -68,6 +68,7 @@ layout(set = 0, binding = 9) uniform RTXSettings
 {
     int bounces;
     int frameIndex;
+    int numPastFrames;
 } rtx;
 
 
@@ -310,8 +311,8 @@ void main()
 	vec3 worldNormal = normalize(vec3(objectNormal * gl_WorldToObjectEXT).xyz);
 
     // Compute direct lighting at the first hit
-    vec3 sunDirection = normalize(vec3(0.0, 1.0, 0.5)); //.5 for z
-    float sunIntensity = 100.0;
+    vec3 sunDirection = normalize(vec3(0.0, 1.0, 0.35)); //.5 for z
+    float sunIntensity = 20.0;
     vec3 sunColor = vec3(1.0, 0.95, 0.9);
     float sunAngularSize = 0.8;
 

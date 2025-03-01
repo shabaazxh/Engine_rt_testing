@@ -78,15 +78,17 @@ namespace vk
 	{
 		alignas(4) int bounces;
 		alignas(4) int frameIndex;
+		alignas(4) int numPastFrames;
 	};
 
 	inline PostProcessing postProcessSettings = {};
 	inline double deltaTime;
 	inline uint32_t setRenderingPipeline = 1;
 	inline uint32_t setAlphaMakingPipeline = 2;
-	inline RTX rtxSettings = { 2, 0 };
+	inline RTX rtxSettings = { 2, 0, 2 };
 	inline VkDescriptorSetLayout materialDescriptorSetLayout;
 	inline uint32_t frameNumber = 0;
+	inline bool isAccumulating = false;
 }
 
 namespace vk

@@ -67,6 +67,7 @@ void vk::ImGuiRenderer::Update(const std::shared_ptr<Scene>& scene, const std::s
 
 
     ImGui::SliderInt("Bounces: ", &rtxSettings.bounces, 0, 10);
+    ImGui::SliderInt("PastFrames: ", &rtxSettings.numPastFrames, 0, 10);
 
     if (ImGui::CollapsingHeader("Directional Light"))
     {

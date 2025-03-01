@@ -34,7 +34,7 @@ void main()
 		for (int i = 0; i < 9; i++) {
 			denoised += texture(renderedScene, uv + offsets[i]) * kernel[i];
 		}
-		fragColor = vec4(color.xyz, 1.0);
+		fragColor = vec4(denoised.xyz, 1.0);
 
 	} else {
 		vec3 scene = texture(nonTemporalScene, uv).rgb;

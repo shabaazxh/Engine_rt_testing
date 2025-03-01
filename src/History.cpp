@@ -10,6 +10,11 @@ vk::History::History(Context& context, const Image& renderedImage) : context{con
 	m_width = context.extent.width;
 	m_height = context.extent.height;
 
+	m_rtxSettingsUBO.resize(MAX_FRAMES_IN_FLIGHT);
+	for (auto& buffer : m_rtxSettingsUBO)
+		buffer = CreateBuffer("HistoryRTXUBO", context, sizeof(RTX), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+
+
 	// Create the history buffer images
 	for (size_t i = 0; i < 5; i++)
 	{
@@ -44,6 +49,21 @@ vk::History::History(Context& context, const Image& renderedImage) : context{con
 	CreatePipeline();
 }
 
+
+void vk::History::Update()
+{
+	if (isAccumulating)
+	{
+		accNumber += 1;
+	}
+	else
+	{
+		accNumber = 0;
+	}
+	rtxSettings.numPastFrames = rtxSettings.numPastFrames;
+	rtxSettings.frameIndex = (accNumber);
+	m_rtxSettingsUBO[currentFrame].WriteToBuffer(&rtxSettings, sizeof(RTX));
+}
 
 void vk::History::Execute(VkCommandBuffer cmd)
 {
@@ -95,7 +115,8 @@ void vk::History::BuildDescriptors()
 	// Set = 0, binding 0 = rendered scene image
 	std::vector<VkDescriptorSetLayoutBinding> bindings = {
 		CreateDescriptorBinding(0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT),
-		CreateDescriptorBinding(1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT)
+		CreateDescriptorBinding(1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT),
+		CreateDescriptorBinding(2, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT)
 	};
 
 	m_descriptorSetLayout = CreateDescriptorSetLayout(context, bindings);
@@ -122,6 +143,15 @@ void vk::History::BuildDescriptors()
 		};
 
 		UpdateDescriptorSet(context, 1, imgInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	}
+
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		VkDescriptorBufferInfo bufferInfo{};
+		bufferInfo.buffer = m_rtxSettingsUBO[i].buffer;
+		bufferInfo.offset = 0;
+		bufferInfo.range = sizeof(RTX);
+		UpdateDescriptorSet(context, 2, bufferInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 	}
 }
 

@@ -4,6 +4,14 @@ layout(local_size_x = 16, local_size_y = 16) in;
 layout(set = 0, binding = 0) uniform sampler2D renderedScene;       // Current noisy SSGI
 layout(set = 0, binding = 1, rgba16f) uniform image2D temporalAccumImage; // History buffer (read/write)
 
+layout(set = 0, binding = 2) uniform RTXSettings
+{
+    int bounces;
+    int frameIndex;
+    int numPastFrames;
+} rtx;
+
+
 void main() {
 
     vec2 resolution = vec2(1280, 720);
@@ -21,9 +29,10 @@ void main() {
     vec4 history = imageLoad(temporalAccumImage, coords);
 
     // Temporal blend (exponential moving average)
-    float alpha = 0.1; // e.g., 0.1
-    vec3 combined = mix(history.rgb, newColour.rgb, alpha);
+    int cappedFrameIndex = min(rtx.frameIndex, rtx.numPastFrames);
+    float alpha = (rtx.frameIndex <= 1) ? 1.0 : 1.0 / float(rtx.frameIndex); // frameIndex is number of frames accumulated frames since pressing accumulation //            0.1
+    vec4 combined = mix(history, newColour, alpha);
 
     // Write to history buffer
-    imageStore(temporalAccumImage, coords, vec4(combined, 1.0));
+    imageStore(temporalAccumImage, coords, vec4(combined));
 }
