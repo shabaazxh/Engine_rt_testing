@@ -52,7 +52,7 @@ vk::Renderer::Renderer(Context& context) : context{context}
 
 	std::vector<glm::vec4> spotLightPositions;
 
-	for (size_t i = 0; i < 25; i++)
+	for (size_t i = 0; i < 26; i++)
 	{
 		spotLightPositions.push_back(glm::vec4(-9.0 + i * 50.0, 5.0f, 0.5f, 1.0f));
 	}
@@ -68,7 +68,7 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	m_scene = std::make_shared<Scene>(context, m_materialManager);
 
 	m_scene->AddModel(gltf, m_materialManager);
-	m_scene->AddLightSource(directionalLight);
+	//m_scene->AddLightSource(directionalLight);
 
 	//for (auto& light : spotLightPositions)
 	//{

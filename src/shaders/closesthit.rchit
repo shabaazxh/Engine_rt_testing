@@ -287,7 +287,6 @@ vec3 computeIndirectLightingBEFORENEW(vec3 pos, vec3 n, vec3 albedo, float sunIn
 
     for (int bounce = 0; bounce < bounces; bounce++) {
         // ----- Resampled Importance Sampling (RIS) -----
-        vec3 directLighting = vec3(0.0);
 
         // Define the maximum number of candidate lights for RIS
         const int candidateMax = 5;  // You can adjust this number for performance vs. quality
@@ -298,34 +297,26 @@ vec3 computeIndirectLightingBEFORENEW(vec3 pos, vec3 n, vec3 albedo, float sunIn
         float samplePdfG = 0.0f;
 
         for (int i = 0; i < candidateMax; i++) {
-            // Sample a random light index
+
             int randomLightIndex = int(GetRandomNumber(seed) * float(NUM_LIGHTS));
             Light light = lightData.lights[randomLightIndex];
 
-            bool isDirectional = light.Type == 1 ? false : true;
+            bool isDirectional = light.Type == 0 ? true : false;
             vec3 lightDir = vec3(0.0);
             vec3 LightColour = vec3(0.0);
-            float intensity = 0.0;
-            float visibility = 1.0;
 
             // Compute direction and visibility based on light type
             if (isDirectional) {
                 lightDir = normalize(light.LightPosition.xyz);
                 LightColour = light.LightColour.rgb;
-                intensity = sunIntensity;
-                visibility = CastShadowRay(pos, n, lightDir, 10000.0); // Compute visibility only for directional light
             } else {
                 lightDir = normalize(light.LightPosition.xyz - pos);
                 float dist = length(light.LightPosition.xyz - pos);
                 float att = 1.0 / (dist * dist);  // Attenuation factor for point lights
                 LightColour = light.LightColour.xyz * att;
-                intensity = 1000.0f;
-                visibility = CastShadowRay(pos, n, lightDir, dist);
             }
 
-            // Calculate light contribution (radiance)
-            vec3 directLight = computeDirectLighting(pos, n, albedo, lightDir, intensity, LightColour);
-
+            float intensity = isDirectional ? sunIntensity : 1000.0;  // Intensity based on light type
             // Compute the weight (importance) of this light source based on radiance
             float candidatePdfG = max(dot(n, lightDir), 0.0);  // Lambertian cosine term
             float candidateWeight = candidatePdfG * intensity;  // Weight based on radiance and cosine
@@ -336,12 +327,14 @@ vec3 computeIndirectLightingBEFORENEW(vec3 pos, vec3 n, vec3 albedo, float sunIn
             // Perform weighted sampling (Reservoir Sampling)
             if (GetRandomNumber(seed) < (candidateWeight / totalWeights)) {
                 selectedLight = light;
+                selectedLight.LightColour.rgb = LightColour.rgb;
                 samplePdfG = candidatePdfG;
             }
-
-            // Accumulate the direct light contribution (we'll update this below after RIS)
-            directLighting += directLight * visibility;
         }
+
+        vec3 selectedDir = selectedLight.Type == 0 ? normalize(selectedLight.LightPosition.xyz) : normalize(selectedLight.LightPosition.xyz - pos);
+        float visibility = CastShadowRay(pos, n, selectedDir, selectedLight.Type == 0 ? 10000.0 : length(selectedLight.LightPosition.xyz - pos) - 0.001);
+        vec3 directLighting = computeDirectLighting(pos, n, albedo, selectedDir, selectedLight.Type == 0 ? sunIntensity : 1000.0, selectedLight.LightColour.rgb) * visibility;
 
         // After accumulating the weights, perform the final light selection
         radiance += throughput * directLighting * (totalWeights / candidateMax);
