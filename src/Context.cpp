@@ -513,9 +513,15 @@ void vk::Context::CreateLogicalDevice()
         .pNext = &scalarBlockFeatures
     };
 
+    VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures_2 = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
+        .pNext = &indexingFeatures
+    };
+
+
     VkPhysicalDeviceFeatures2 deviceFeatures2{};
     deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-    deviceFeatures2.pNext = &indexingFeatures;
+    deviceFeatures2.pNext = &indexingFeatures_2;
     deviceFeatures2.features.samplerAnisotropy = VK_TRUE;
 
     VkDeviceCreateInfo deviceInfo = {};

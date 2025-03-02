@@ -83,7 +83,7 @@ void vk::ImGuiRenderer::Update(const std::shared_ptr<Scene>& scene, const std::s
         for (size_t i = 1; i < lights.size() - 1; ++i) {
             if (lights[i].Type != LightType::Directional) {
                 std::string label = "Light " + std::to_string(i) + " Position";
-                ImGui::SliderFloat3(label.c_str(), &lights[i].position.x, -10.0f, 10.0f, "%.2f");
+                ImGui::SliderFloat3(label.c_str(), &lights[i].position.x, -600.0f, 600.0f, "%.2f");
             }
         }
     }
