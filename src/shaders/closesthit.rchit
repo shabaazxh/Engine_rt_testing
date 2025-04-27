@@ -59,7 +59,7 @@ layout(set = 0, binding = 6, scalar) readonly buffer MaterialBuffer {
 
 layout(set = 0, binding = 7) uniform sampler2D textures[300];
 
-const int NUM_LIGHTS = 26;
+const int NUM_LIGHTS = 51;
 
 layout(set = 0, binding = 8) uniform LightBuffer {
 	Light lights[NUM_LIGHTS];
@@ -153,11 +153,11 @@ float value(vec3 direction, vec3 normal)
 	return cosTheta / PI;
 }
 
-vec3 computeDirectLighting(vec3 worldPos, vec3 worldNormal, vec3 albedo, vec3 sunDirection, float sunIntensity, vec3 sunColor) {
-    vec3 L = (sunDirection); // Sun is directional, not a point
+vec3 computeDirectLighting(vec3 worldPos, vec3 worldNormal, vec3 albedo, vec3 lightDirection, float lightIntensity, vec3 lightColour) {
+    vec3 L = normalize(lightDirection);
     float cosTheta = max(dot(worldNormal, L), 0.0);
-    vec3 brdf = albedo / PI; // Diffuse BRDF
-    return brdf * sunColor * sunIntensity * cosTheta;
+    vec3 brdf = albedo / PI; // Diffuse BRDF - All surfaces assumed Diffuse
+    return brdf * lightColour * lightIntensity * cosTheta;
 }
 
 float CastShadowRay(vec3 pos, vec3 normal, vec3 lightDir, float dist) {
@@ -192,13 +192,17 @@ vec3 computeIndirectLighting(vec3 pos, vec3 n, vec3 albedo, float sunIntensity) 
 
     for (int bounce = 0; bounce < bounces; bounce++) {
         // ----- RIS for Direct Lighting -----
-        const int candidateMax = 5;
+        const int candidateMax = 8;
         float totalWeights = 0.0f;
         Light selectedLight;
         float selectedWeight = 0.0f;
         float samplePdfG = 0.0f;
         bool isDirectional = false;
         float intensity = 0.0f;
+        float lightWeight = 0.0f;
+
+        // PDF of uniform distribution = 1 / total number of lights. Reciporal of that PDF is the light count e.g. 1 / 10 = 0.1 -> rcp = 1 / (1 / 10) = 10.0
+        float candidateWeight = float(NUM_LIGHTS);
 
         for (int i = 0; i < candidateMax; i++) {
 
@@ -218,27 +222,31 @@ vec3 computeIndirectLighting(vec3 pos, vec3 n, vec3 albedo, float sunIntensity) 
                 float dist = length(light.LightPosition.xyz - pos);
                 float att = 1.0 / (dist * dist);
                 LightColour = light.LightColour.xyz * att;
-                intensity = 1000.0f;
+                intensity = 1000.0f * att;
             }
 
-            vec3 directLight = computeDirectLighting(pos, n, albedo, lightDir, intensity, LightColour);
-            float candidatePdfG = max(dot(n, lightDir), 0.0);
-            float candidateWeight = candidatePdfG * intensity; // Use luminance for simplicity
+            float candidatePdfG = intensity;
+            const float candidateRISWeight = candidatePdfG * candidateWeight;
+            totalWeights += candidateRISWeight;
 
-            totalWeights += candidateWeight;
-            if (GetRandomNumber(seed) < (candidateWeight / totalWeights)) {
+            if (GetRandomNumber(seed) < (candidateRISWeight / totalWeights)) {
                 selectedLight = light;
                 selectedLight.LightColour.rgb = LightColour.rgb;
-                selectedWeight = candidateWeight;
+                selectedWeight = candidateRISWeight;
                 samplePdfG = candidatePdfG;
             }
         }
 
+        lightWeight = (totalWeights / float(candidateMax)) / samplePdfG;
+
         // Evaluate the selected light
         vec3 selectedDir = isDirectional == true ? normalize(selectedLight.LightPosition.xyz) : normalize(selectedLight.LightPosition.xyz - pos);
         float visibility = CastShadowRay(pos, n, selectedDir, isDirectional ? 10000.0 : length(selectedLight.LightPosition.xyz - pos) - 0.001);
-        vec3 directLighting = computeDirectLighting(pos, n, albedo, selectedDir, intensity, selectedLight.LightColour.rgb) * visibility;
-        radiance += throughput * directLighting * (selectedWeight / totalWeights) * (float(NUM_LIGHTS) / candidateMax);
+        // I'm computing direct lighting here and then again once the light has been selected
+        // Perhaps I should store this result and just use it after this loop ends so that directLighting
+        // is the computed lighting contribution of the final selected light
+        vec3 directLighting = computeDirectLighting(pos, n, albedo, selectedDir, intensity, selectedLight.LightColour.rgb) * lightWeight * visibility;
+        radiance += throughput * directLighting;
 
         // ----- Indirect Lighting -----
         if (bounce == bounces - 1) break;
@@ -258,7 +266,7 @@ vec3 computeIndirectLighting(vec3 pos, vec3 n, vec3 albedo, float sunIntensity) 
             float pdf = cosTheta / PI;
 
             if (pdf > 0.001) {
-                radiance += throughput *= (brdf * cosTheta) / pdf;
+                radiance += throughput *= (brdf * cosTheta) / pdf; // cos(theta) / pi PDF will cancel out with lambertian (need to change this)
             }
 
             pos = diffusePayLoad.hitpos;
@@ -499,6 +507,98 @@ vec3 computeIndirectLightingOLD(vec3 pos, vec3 n, vec3 albedo, float sunIntensit
     return radiance;
 }
 
+
+vec3 RISDirectLighting(vec3 pos, vec3 n, vec3 albedo)
+{
+    uint seed = uint(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x) + gl_LaunchIDEXT.x;
+    seed *= rtx.frameIndex;
+
+    vec3 radiance = vec3(0.0);
+    vec3 throughput = vec3(1.0);
+
+    const int candidateMax = 8;
+    float totalWeights = 0.0f;
+    Light selectedLight;
+    float selectedWeight = 0.0f;
+    float samplePdfG = 0.0f;
+    bool isDirectional = false;
+    float intensity = 0.0f;
+    float lightWeight = 0.0f;
+    vec3 selectedDir = vec3(0);
+
+    // Picking any light direction has a uniform distribution
+    // Each light is equally likely to be picked as any other. PDF = 1 / NUM_LIGHTS
+    // PDF of uniform distribution = 1 / total number of lights. Reciporal of that PDF is the light count e.g. 1 / 10 = 0.1 -> rcp = 1 / (1 / 10) = 10.0
+    float candidateWeight = float(NUM_LIGHTS);
+
+    // For N number of candidate lights
+    for (int i = 0; i < candidateMax; i++) {
+
+        // Pick a random light from all lights
+        int randomLightIndex = int(GetRandomNumber(seed) * float(NUM_LIGHTS));
+        Light light = lightData.lights[randomLightIndex];
+
+        // Get the properties of this light
+        vec3 lightDir = normalize(light.LightPosition.xyz - pos);
+        float dist = length(light.LightPosition.xyz - pos);
+        float att = 1.0 / (dist * dist);
+        vec3 LightColour = light.LightColour.xyz;
+        intensity = 1000.0f * att;
+
+        // Compute RIS weight for this candidate light
+        float candidatePdfG = max(dot(n, lightDir), 0.0); // Weight based on lamberts cosine to see contribution of this light at this position
+        const float candidateRISWeight = candidatePdfG * candidateWeight;
+        totalWeights += candidateRISWeight;
+
+        // To prevent bias, randomly select a light based on its weight
+        if (GetRandomNumber(seed) < (candidateRISWeight / totalWeights)) {
+            selectedLight = light;
+            selectedLight.LightColour.rgb = LightColour.rgb;
+            selectedWeight = candidateRISWeight;
+            samplePdfG = candidatePdfG;
+            selectedDir = lightDir;
+        }
+    }
+
+    lightWeight = (totalWeights / float(candidateMax)) / samplePdfG;
+
+    // Compute direct lighting usinng the selected light [Check lightWeight here. Is it correct?]
+    float visibility = CastShadowRay(pos, n, selectedDir, length(selectedLight.LightPosition.xyz - pos) - 0.001);
+    vec3 directLighting = computeDirectLighting(pos, n, albedo, selectedDir, intensity, selectedLight.LightColour.rgb) * lightWeight * visibility;
+    radiance += throughput * directLighting;
+
+    return radiance;
+}
+
+vec3 NaiveDirectLighting(vec3 pos, vec3 n, vec3 albedo)
+{
+    vec3 radiance = vec3(0.0);
+    vec3 throughput = vec3(1.0);
+
+    for (int i = 0; i < NUM_LIGHTS; i++) {
+
+        Light light = lightData.lights[i];
+
+        vec3 lightDir;
+        vec3 LightColour;
+        float intensity = 0.0f;
+
+        // We have no directional light source so we're not checking directly for directional or other
+        lightDir = normalize(light.LightPosition.xyz - pos);
+        float dist = length(light.LightPosition.xyz - pos);
+        float att = 1.0 / (dist * dist);
+        LightColour = light.LightColour.xyz;
+        intensity = 1000.0f * att;
+
+        float visibility = CastShadowRay(pos, n, lightDir, length(light.LightPosition.xyz - pos) - 0.001);
+        vec3 directLighting = computeDirectLighting(pos, n, albedo, lightDir, intensity, LightColour.rgb) * visibility;
+        radiance += throughput * directLighting;
+    }
+
+    return radiance;
+}
+
+
 void main()
 {
 	const int primitiveID = gl_PrimitiveID;
@@ -538,6 +638,8 @@ void main()
     vec3 sunColor = vec3(1.0, 0.95, 0.9);
     float sunAngularSize = 0.8;
 
-    vec3 indirectLight = computeIndirectLightingBEFORENEW(worldPos, worldNormal, albedo, sunIntensity);
-    rayPayLoad.colour = indirectLight * albedo;
+    //vec3 indirectLight = computeIndirectLightingBEFORENEW(worldPos, worldNormal, albedo, sunIntensity);
+    vec3 RISDirectLight = RISDirectLighting(worldPos, worldNormal, albedo);
+    // vec3 NaiveDirectLight = NaiveDirectLighting(worldPos, worldNormal, albedo);
+    rayPayLoad.colour = RISDirectLight;
 }

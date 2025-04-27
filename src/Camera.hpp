@@ -14,7 +14,7 @@ constexpr float m_speedIncreaseAmount = 100.0f;
 constexpr float m_speedDecreaseAmount = 8.0f;
 constexpr float maxSpeed = 1000.0;
 constexpr float minSpeed = 1.0f;
-constexpr float defaultSpeed = 300.0f;
+constexpr float defaultSpeed = 100.0;
 
 namespace vk
 {

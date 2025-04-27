@@ -45,3 +45,5 @@ void main()
 	}
 
 }
+
+/// I have removed the directional light source in Renderer.cpp, add it back in and remove 1 point light to get it back
