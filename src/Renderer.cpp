@@ -54,7 +54,7 @@ vk::Renderer::Renderer(Context& context) : context{context}
 
 	for (size_t i = 0; i < 51; i++)
 	{
-		spotLightPositions.push_back(glm::vec4(-1300.0 + i * 50.0, 100.0f, 5.0f, 1.0f));
+		spotLightPositions.push_back(glm::vec4(-1300.0 + i * 50.0, 5.0f * i * 1.0f, 5.0f, 1.0f));
 	}
 
 
