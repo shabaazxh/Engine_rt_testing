@@ -153,11 +153,37 @@ float value(vec3 direction, vec3 normal)
 	return cosTheta / PI;
 }
 
+vec3 FresnelShlick(float cosTheta, float metalness)
+{
+    vec3 F0 = vec3(0.04);
+    F0 = mix(vec3(0.04), F0, metalness);
+    return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+}
+
 vec3 computeDirectLighting(vec3 worldPos, vec3 worldNormal, vec3 albedo, vec3 lightDirection, float lightIntensity, vec3 lightColour) {
     vec3 L = normalize(lightDirection);
     float cosTheta = max(dot(worldNormal, L), 0.0);
     vec3 brdf = albedo / PI; // Diffuse BRDF - All surfaces assumed Diffuse
     return brdf * lightColour * lightIntensity * cosTheta;
+}
+
+
+vec3 DiffuseBRDF(vec3 normal, vec3 position, vec3 albedo, vec3 LightDirection, vec3 LightColour, float LightIntensity)
+{
+    float metallic = 0.1;
+    vec3 L = normalize(LightDirection);
+    vec3 N = normal;
+    vec3 V = normalize(ubo.cameraPosition.xyz - position);
+    vec3 H = normalize(V + L);
+
+    vec3 FresnelReflectance = FresnelShlick(max(dot(H, V), 0.0), metallic);
+    vec3 kD = vec3(1.0) - FresnelReflectance; // Diffuse component
+    kD *= 1.0 - metallic;
+
+    float NdotL = max(dot(N, L), 0.0);
+    vec3 diffuse = (kD * albedo / PI) * LightColour * NdotL;
+
+    return diffuse;
 }
 
 float CastShadowRay(vec3 pos, vec3 normal, vec3 lightDir, float dist) {
@@ -519,6 +545,7 @@ struct Candidate
     float intensity;
 };
 
+
 int RandomIndex(uint seed, in Candidate candidates[CANDIDATE_MAX], in float totalWeights)
 {
     float r = GetRandomNumber(seed);
@@ -559,7 +586,7 @@ void ComputeCandidatesWeights(in uint seed, vec3 pos, vec3 n, inout Candidate ca
         candidates[i].intensity = 1000.0f * att;
 
         // Compute RIS weight for this candidate light
-        float F_x = max(dot(n, candidates[i].lightDir), 0.0); // Simplied F(x) for weighting. Not sure if need to compute entir BRDF * cosine * ....?
+        float F_x = max(dot(n, candidates[i].lightDir), 0.0) + 0.001; // Simplied F(x) for weighting. Not sure if need to compute entir BRDF * cosine * ....?
         candidates[i].Fx = F_x; // The target function F(x) that PDF(X) approximates better with more candidates. Using lambert cosine term but this can be other importance sampling methods
         float candidateRISWeight = rcpM * F_x * rcpUniformDistributionWeight;
         candidates[i].weight = candidateRISWeight; // Move 1.0 / M when computing weight as suggested
@@ -612,6 +639,98 @@ vec3 RISSampling(vec3 pos, vec3 n, vec3 albedo)
 
     return radiance;
 }
+
+struct Reservoir
+{
+    Candidate Y;
+    float W_y;
+    float totalWeights;
+    int index;
+};
+
+void update(uint seed, inout Reservoir reservoir, in Candidate xi, in float xi_weight, int index)
+{
+    reservoir.totalWeights = reservoir.totalWeights + xi_weight;
+    float r = GetRandomNumber(seed);
+    if(r < (xi_weight / reservoir.totalWeights))
+    {
+        reservoir.Y = xi;
+        reservoir.index = index;
+    }
+}
+
+void RISReservoir(inout Reservoir reservoir, uint seed, vec3 pos, vec3 n, inout Candidate candidates[CANDIDATE_MAX], vec3 albedo)
+{
+    const float rcpUniformDistributionWeight = float(NUM_LIGHTS); // PDF of uniform distribution = 1 / total number of lights. Reciporal of that PDF is the light count e.g. 1 / 10 = 0.1 -> rcp = 1 / (1 / 10) = 10.0
+    const float rcpM = 1.0 / float(CANDIDATE_MAX);
+
+    // Picking any light direction has a uniform distribution
+    for (int i = 0; i < CANDIDATE_MAX; i++) {
+
+        // Pick a random light from all lights
+        int randomLightIndex = int(GetRandomNumber(seed) * float(NUM_LIGHTS));
+        candidates[i].light = lightData.lights[randomLightIndex];
+
+        // Get the properties of this light
+        float dist = length(candidates[i].light.LightPosition.xyz - pos);
+        float att = 1.0 / (dist * dist);
+        candidates[i].lightDir = normalize(candidates[i].light.LightPosition.xyz - pos);
+        candidates[i].intensity = 1000.0f * att;
+
+        // Compute RIS weight for this candidate light
+        float F_x = max(dot(n, candidates[i].lightDir), 0.001) * candidates[i].intensity; // Simplied F(x) for weighting. Not sure if need to compute entir BRDF * cosine * ....?
+        candidates[i].Fx = F_x; // The target function F(x) that PDF(X) approximates better with more candidates. Using lambert cosine term but this can be other importance sampling methods
+        candidates[i].weight = rcpM * F_x * rcpUniformDistributionWeight; // Move 1.0 / M when computing weight as suggested
+
+        update(seed, reservoir, candidates[i], candidates[i].weight, i);
+    }
+}
+
+vec3 RISReservoirSampling(vec3 pos, vec3 n, vec3 albedo)
+{
+    uint seed = uint(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x) + gl_LaunchIDEXT.x;
+    seed *= rtx.frameIndex;
+
+    vec3 radiance = vec3(0.0);
+    vec3 throughput = vec3(1.0);
+
+    Reservoir reservoir;
+    reservoir.totalWeights = 0.0;
+    reservoir.W_y = 0.0;
+    reservoir.index = -1;
+
+    Candidate candidates[CANDIDATE_MAX];
+
+    // Compute the weights of the candidates from the original distribution
+    RISReservoir(reservoir, seed, pos, n, candidates, albedo);
+
+    bool isValidIndex = reservoir.index > -1;
+
+    if(isValidIndex) {
+        // The selected light
+        Candidate LightSource = reservoir.Y;
+
+        // Compute the light weight to prevent bias
+        // W_x = (sum(w_i) / M) / pdf(x)
+        // Written as: 1 / pdf(x) * (1 / m * sum(w_i)), but remember 1 / pdf(x) and 1 / m is the same as dividing by them since 1 / x is rcp
+        float rcpPDF = 1.0 / LightSource.Fx;
+        if (isinf(rcpPDF))
+            return vec3(1.0, 0.0, 1.0);
+        // Evaluate the unbiased constribuion weight W_x
+        // We moved rcpM = 1 / float(CANDIDATE_MAX) when computing weight for each candidate as suggested by paper
+        float W_x = rcpPDF * (reservoir.totalWeights);
+        reservoir.W_y = W_x;
+
+        // Compute direct lighting using the elected light source
+        float Visibility = CastShadowRay(pos, n, LightSource.lightDir, length(LightSource.light.LightPosition.xyz - pos) - 0.001);
+        vec3 directLighting = computeDirectLighting(pos, n, albedo, LightSource.lightDir, LightSource.intensity, LightSource.light.LightColour.rgb) * W_x * Visibility;
+        radiance += throughput * directLighting;
+    }
+
+    return radiance;
+}
+
+
 
 //vec3 RISDirectLighting(vec3 pos, vec3 n, vec3 albedo)
 //{
@@ -747,7 +866,7 @@ void main()
     float sunAngularSize = 0.8;
 
     //vec3 indirectLight = computeIndirectLightingBEFORENEW(worldPos, worldNormal, albedo, sunIntensity);
-    vec3 DirectLight = RISSampling(worldPos, worldNormal, albedo);
+    vec3 DirectLight = RISReservoirSampling(worldPos, worldNormal, albedo);
     //vec3 DirectLight = NaiveDirectLighting(worldPos, worldNormal, albedo);
     rayPayLoad.colour = DirectLight;
 }
