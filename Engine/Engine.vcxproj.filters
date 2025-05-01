@@ -48,6 +48,9 @@
     <ClInclude Include="..\src\Light.hpp">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\MotionVectors.hpp">
+      <Filter>src</Filter>
+    </ClInclude>
     <ClInclude Include="..\src\Pipeline.hpp">
       <Filter>src</Filter>
     </ClInclude>
@@ -67,6 +70,9 @@
       <Filter>src</Filter>
     </ClInclude>
     <ClInclude Include="..\src\ShadowMap.hpp">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Spatial.hpp">
       <Filter>src</Filter>
     </ClInclude>
     <ClInclude Include="..\src\Utils.hpp">
@@ -131,6 +137,9 @@
     <ClCompile Include="..\src\Image.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\MotionVectors.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
     <ClCompile Include="..\src\PresentPass.cpp">
       <Filter>src</Filter>
     </ClCompile>
@@ -147,6 +156,9 @@
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="..\src\ShadowMap.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Spatial.cpp">
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="..\src\Utils.cpp">

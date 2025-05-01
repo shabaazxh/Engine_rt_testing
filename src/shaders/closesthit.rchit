@@ -12,6 +12,17 @@ struct Light
 };
 
 layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
+layout(set = 0, binding = 10, rgba32f) uniform image2D WorldPositionImage;
+layout(set = 0, binding = 12, rgba32f) uniform image2D ReservoirsImage;
+struct Res
+{
+    int Y;
+    float Y_weight;
+};
+
+layout(std430, binding = 11) buffer ReservoirBuffer {
+    Res reservoirs[];
+}ReservoirStorageBuffer;
 
 #define PI 3.14159265359
 
@@ -620,7 +631,6 @@ vec3 RISSampling(vec3 pos, vec3 n, vec3 albedo)
     {
         // The selected light
         Candidate LightSource = candidates[selectedIndex];
-
         // Compute the light weight to prevent bias
         // W_x = (sum(w_i) / M) / pdf(x)
         // Written as: 1 / pdf(x) * (1 / m * sum(w_i)), but remember 1 / pdf(x) and 1 / m is the same as dividing by them since 1 / x is rcp
@@ -631,8 +641,11 @@ vec3 RISSampling(vec3 pos, vec3 n, vec3 albedo)
         float W_x = rcpPDF * (totalWeights);
 
         // Compute direct lighting using the elected light source
+        //vec3 DiffuseBRDF(vec3 normal, vec3 position, vec3 albedo, vec3 LightDirection, vec3 LightColour, float LightIntensity)
+
         float Visibility = CastShadowRay(pos, n, LightSource.lightDir, length(LightSource.light.LightPosition.xyz - pos) - 0.001);
-        vec3 directLighting = computeDirectLighting(pos, n, albedo, LightSource.lightDir, LightSource.intensity, LightSource.light.LightColour.rgb) * W_x * Visibility;
+        vec3 directLighting = DiffuseBRDF(n, pos, albedo, LightSource.lightDir.xyz, LightSource.light.LightColour.rgb, LightSource.intensity);
+        //vec3 directLighting = computeDirectLighting(pos, n, albedo, LightSource.lightDir, LightSource.intensity, LightSource.light.LightColour.rgb) * W_x * Visibility;
         radiance += throughput * directLighting;
     }
 
@@ -709,17 +722,31 @@ vec3 RISReservoirSampling(vec3 pos, vec3 n, vec3 albedo)
     if(isValidIndex) {
         // The selected light
         Candidate LightSource = reservoir.Y;
+        uint pixelIndex = gl_LaunchIDEXT.y * 1280 + gl_LaunchIDEXT.x;
+
+        //ReservoirStorageBuffer.reservoirs[pixelIndex] = r;
 
         // Compute the light weight to prevent bias
         // W_x = (sum(w_i) / M) / pdf(x)
         // Written as: 1 / pdf(x) * (1 / m * sum(w_i)), but remember 1 / pdf(x) and 1 / m is the same as dividing by them since 1 / x is rcp
         float rcpPDF = 1.0 / LightSource.Fx;
+
+        // This is debug to ensure its valid, remove eventually
         if (isinf(rcpPDF))
             return vec3(1.0, 0.0, 1.0);
+
         // Evaluate the unbiased constribuion weight W_x
         // We moved rcpM = 1 / float(CANDIDATE_MAX) when computing weight for each candidate as suggested by paper
         float W_x = rcpPDF * (reservoir.totalWeights);
         reservoir.W_y = W_x;
+
+        // Store the reservoirs index into the correct light + the weighting of it
+        // Then in the next pass, e.g. compute pass, spatially reuse informaion to compute a new reservoir
+        // if the next pass was temporal reuse, then we would take the previous temporal + spatial output and mix it with current intial candidates
+        // once this is done, we pass it to another pass which will then spatially reuse and from there pass it to the next RT pass for it to be used
+        // and select reservoir for current pixel
+        imageStore(ReservoirsImage, ivec2(gl_LaunchIDEXT.xy), vec4(reservoir.index, reservoir.W_y, 0.0, 0.0));
+
 
         // Compute direct lighting using the elected light source
         float Visibility = CastShadowRay(pos, n, LightSource.lightDir, length(LightSource.light.LightPosition.xyz - pos) - 0.001);
@@ -855,6 +882,8 @@ void main()
 
 	vec3 pos = v0 * barycentrics.x + v1 * barycentrics.y + v2 * barycentrics.z;
 	const vec3 worldPos = vec3(gl_ObjectToWorldEXT * vec4(pos, 1.0));
+
+    imageStore(WorldPositionImage, ivec2(gl_LaunchIDEXT.xy), vec4(worldPos, 0.0));
 
 	vec3 objectNormal = normalize(cross(v1 - v0, v2 - v0));
 	vec3 worldNormal = normalize(vec3(objectNormal * gl_WorldToObjectEXT).xyz);

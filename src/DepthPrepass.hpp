@@ -11,7 +11,7 @@ namespace vk
 	class Image;
 	class Camera;
 	class DepthPrepass
-	{	
+	{
 	public:
 
 		explicit DepthPrepass(Context& context, std::shared_ptr<Scene> scene, std::shared_ptr<Camera> camera);
@@ -26,7 +26,7 @@ namespace vk
 		void CreateRenderPass();
 		void CreateFramebuffer();
 		void BuildDescriptors();
-		
+
 		Context& context;
 		std::shared_ptr<Scene> scene;
 		std::shared_ptr<Camera> camera;

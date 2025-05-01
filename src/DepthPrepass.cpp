@@ -52,7 +52,7 @@ vk::DepthPrepass::~DepthPrepass()
 void vk::DepthPrepass::Resize()
 {
 	m_DepthTarget.Destroy(context.device);
-	
+
 	m_DepthTarget = CreateImageTexture2D(
 		"DepthPrepass_RT",
 		context,
@@ -105,7 +105,7 @@ void vk::DepthPrepass::Execute(VkCommandBuffer cmd)
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_PipelineLayout, 0, 1, &m_descriptorSets[currentFrame], 0, nullptr);
 
 	// Draw front freshes
-	// 
+	//
 	scene->DrawGLTF(cmd, m_PipelineLayout);
 
 	//scene->RenderFrontMeshes(cmd, m_PipelineLayout);
@@ -136,7 +136,7 @@ void vk::DepthPrepass::CreatePipeline()
 		.SetPipelineLayout({ {m_descriptorSetLayout, materialDescriptorSetLayout} }, pushConstantRange)
 		.SetSampling(VK_SAMPLE_COUNT_1_BIT)
 		.AddBlendAttachmentState()
-		.SetDepthState(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL) // Depth write and test enabled 
+		.SetDepthState(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL) // Depth write and test enabled
 		.SetRenderPass(m_renderPass)
 		.Build();
 

@@ -24,7 +24,7 @@ namespace vk
 	enum class RenderType
 	{
 		FORWARD,
-		DEFERRED,
+		RAYPASS,
 		MESH_DENSITY
 	};
 
@@ -79,6 +79,17 @@ namespace vk
 		alignas(4) int bounces;
 		alignas(4) int frameIndex;
 		alignas(4) int numPastFrames;
+	};
+
+	struct Reservoir
+	{
+		int Y; // Currently Y is index light array
+		float Y_weight;
+	};
+
+	struct ReservoirStorage
+	{
+		Reservoir reservoirs[1280 * 720];
 	};
 
 	inline PostProcessing postProcessSettings = {};

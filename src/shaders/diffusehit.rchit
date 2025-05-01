@@ -2,7 +2,6 @@
 #extension GL_EXT_ray_tracing : enable
 #extension GL_EXT_scalar_block_layout : require
 
-layout(location = 0) rayPayloadInEXT vec3 hitValue;
 hitAttributeEXT vec3 attribs;
 
 layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;

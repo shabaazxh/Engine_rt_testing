@@ -169,7 +169,7 @@ void vk::Scene::CreateBLAS()
 
 		VkAccelerationStructureGeometryTrianglesDataKHR triangles{
 			.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
-			.vertexFormat = VK_FORMAT_R32G32B32A32_SFLOAT,
+			.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT,
 			.vertexData = {.deviceAddress = vertexBufferAddress},
 			.vertexStride = sizeof(Vertex),
 			.maxVertex = static_cast<uint32_t>(mesh.vertices.size() - 1),

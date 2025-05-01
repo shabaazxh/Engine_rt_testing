@@ -13,6 +13,7 @@
 #include "Composite.hpp"
 #include "RayPass.hpp"
 #include "History.hpp"
+#include "Spatial.hpp"
 
 namespace vk
 {
@@ -59,6 +60,7 @@ namespace vk
 		std::unique_ptr<Composite>        m_CompositePass;
 		std::unique_ptr<PresentPass>	  m_PresentPass;
 		std::unique_ptr<RayPass>          m_RayPass;
+		std::unique_ptr<Spatial>          m_SpatialPass;
 		std::unique_ptr<History>          m_HistoryPass;
 		std::shared_ptr<Camera> m_camera;
 		MaterialManager m_materialManager;

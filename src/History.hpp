@@ -37,7 +37,6 @@ namespace vk
 		VkFramebuffer m_historyFramebuffers[5];
 		VkRenderPass m_renderPass;
 
-
 		Image m_RenderTarget;
 
 		VkPipeline m_pipeline;

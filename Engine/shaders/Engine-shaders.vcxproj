@@ -48,6 +48,13 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='release|x64'">
   </ItemDefinitionGroup>
   <ItemGroup>
+    <CustomBuild Include="..\..\src\shaders\Spatial.comp">
+      <FileType>Document</FileType>
+      <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+      <Outputs>../../assets/shaders/Spatial.comp.spv</Outputs>
+      <Message>GLSLC: [COMP] '%(Filename)%(Extension)'</Message>
+    </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\alpha_masking.frag">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")

@@ -34,8 +34,32 @@ vk::RayPass::RayPass(Context& context, std::shared_ptr<Scene>& scene, std::share
 	m_width = context.extent.width;
 	m_height = context.extent.height;
 
+	m_Reservoirs = CreateBuffer("Reservoirs", context, sizeof(ReservoirStorage), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT);
+
 	m_RenderTarget = CreateImageTexture2D(
 		"RayPassRT",
+		context,
+		m_width,
+		m_height,
+		VK_FORMAT_R32G32B32A32_SFLOAT,
+		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		VK_IMAGE_ASPECT_COLOR_BIT,
+		1
+	);
+
+	m_WorldPositionsTarget = CreateImageTexture2D(
+		"RayPassRT_WorldPositions",
+		context,
+		m_width,
+		m_height,
+		VK_FORMAT_R32G32B32A32_SFLOAT,
+		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		VK_IMAGE_ASPECT_COLOR_BIT,
+		1
+	);
+
+	m_InitialCandidates = CreateImageTexture2D(
+		"InitialCandidates_RT",
 		context,
 		m_width,
 		m_height,
@@ -55,6 +79,24 @@ vk::RayPass::RayPass(Context& context, std::shared_ptr<Scene>& scene, std::share
 			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0,
 			VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
 		);
+
+		ImageTransition(
+			cmd,
+			m_WorldPositionsTarget.image,
+			VK_FORMAT_R32G32B32A32_SFLOAT,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0,
+			VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+		);
+
+		ImageTransition(
+			cmd,
+			m_InitialCandidates.image,
+			VK_FORMAT_R32G32B32A32_SFLOAT,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0,
+			VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+		);
 	});
 
 	BuildDescriptors();
@@ -67,7 +109,10 @@ vk::RayPass::~RayPass()
 	for (auto& buffer : m_rtxSettingsUBO)
 		buffer.Destroy(context.device);
 
+	m_Reservoirs.Destroy(context.device);
 	m_RenderTarget.Destroy(context.device);
+	m_WorldPositionsTarget.Destroy(context.device);
+	m_InitialCandidates.Destroy(context.device);
 
 	vkDestroyPipeline(context.device, m_Pipeline, nullptr);
 	vkDestroyPipelineLayout(context.device, m_PipelineLayout, nullptr);
@@ -84,6 +129,7 @@ void vk::RayPass::Resize()
 	m_height = context.extent.height;
 
 	m_RenderTarget.Destroy(context.device);
+	m_WorldPositionsTarget.Destroy(context.device);
 
 	m_RenderTarget = CreateImageTexture2D(
 		"RayPassRT",
@@ -96,11 +142,31 @@ void vk::RayPass::Resize()
 		1
 	);
 
+	m_WorldPositionsTarget = CreateImageTexture2D(
+		"RayPassRT_WorldPositions",
+		context,
+		m_width,
+		m_height,
+		VK_FORMAT_R32G32B32A32_SFLOAT,
+		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		VK_IMAGE_ASPECT_COLOR_BIT,
+		1
+	);
+
 	ExecuteSingleTimeCommands(context, [&](VkCommandBuffer cmd) {
 
 		ImageTransition(
 			cmd,
 			m_RenderTarget.image,
+			VK_FORMAT_R32G32B32A32_SFLOAT,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0,
+			VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+		);
+
+		ImageTransition(
+			cmd,
+			m_WorldPositionsTarget.image,
 			VK_FORMAT_R32G32B32A32_SFLOAT,
 			VK_IMAGE_LAYOUT_UNDEFINED,
 			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0,
@@ -153,22 +219,41 @@ void vk::RayPass::Execute(VkCommandBuffer cmd)
 		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR
 	);
 
-		VkStridedDeviceAddressRegionKHR raygen_shader_sbt_entry{};
-		raygen_shader_sbt_entry.deviceAddress = GetBufferDeviceAddress(context.device, RayGenShaderBindingTable->buffer);
-		raygen_shader_sbt_entry.stride = handle_size_aligned;
-		raygen_shader_sbt_entry.size = handle_size_aligned;
+	ImageTransition(
+		cmd,
+		m_WorldPositionsTarget.image,
+		VK_FORMAT_R32G32B32A32_SFLOAT,
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+		VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR
+	);
 
-		VkStridedDeviceAddressRegionKHR miss_shader_sbt_entry{};
-		miss_shader_sbt_entry.deviceAddress = GetBufferDeviceAddress(context.device, MissShaderBindingTable->buffer);
-		miss_shader_sbt_entry.stride = handle_size_aligned;
-		miss_shader_sbt_entry.size = handle_size_aligned * 2;
+	ImageTransition(
+		cmd,
+		m_InitialCandidates.image,
+		VK_FORMAT_R32G32B32A32_SFLOAT,
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+		VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR
+	);
 
-		VkStridedDeviceAddressRegionKHR hit_shader_sbt_entry{};
-		hit_shader_sbt_entry.deviceAddress = GetBufferDeviceAddress(context.device, HitShaderBindingTable->buffer);
-		hit_shader_sbt_entry.stride = handle_size_aligned;
-		hit_shader_sbt_entry.size = handle_size_aligned;
 
-		VkStridedDeviceAddressRegionKHR callable_shader_sbt_entry{};
+	VkStridedDeviceAddressRegionKHR raygen_shader_sbt_entry{};
+	raygen_shader_sbt_entry.deviceAddress = GetBufferDeviceAddress(context.device, RayGenShaderBindingTable->buffer);
+	raygen_shader_sbt_entry.stride = handle_size_aligned;
+	raygen_shader_sbt_entry.size = handle_size_aligned;
+
+	VkStridedDeviceAddressRegionKHR miss_shader_sbt_entry{};
+	miss_shader_sbt_entry.deviceAddress = GetBufferDeviceAddress(context.device, MissShaderBindingTable->buffer);
+	miss_shader_sbt_entry.stride = handle_size_aligned;
+	miss_shader_sbt_entry.size = handle_size_aligned * 2;
+
+	VkStridedDeviceAddressRegionKHR hit_shader_sbt_entry{};
+	hit_shader_sbt_entry.deviceAddress = GetBufferDeviceAddress(context.device, HitShaderBindingTable->buffer);
+	hit_shader_sbt_entry.stride = handle_size_aligned;
+	hit_shader_sbt_entry.size = handle_size_aligned;
+
+	VkStridedDeviceAddressRegionKHR callable_shader_sbt_entry{};
 
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, m_Pipeline);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, m_PipelineLayout, 0, 1, &m_descriptorSets[currentFrame], 0, nullptr);
@@ -177,6 +262,26 @@ void vk::RayPass::Execute(VkCommandBuffer cmd)
 	ImageTransition(
 		cmd,
 		m_RenderTarget.image,
+		VK_FORMAT_R32G32B32A32_SFLOAT,
+		VK_IMAGE_LAYOUT_GENERAL,
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+		VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+	);
+
+	ImageTransition(
+		cmd,
+		m_WorldPositionsTarget.image,
+		VK_FORMAT_R32G32B32A32_SFLOAT,
+		VK_IMAGE_LAYOUT_GENERAL,
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+		VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+	);
+
+	ImageTransition(
+		cmd,
+		m_InitialCandidates.image,
 		VK_FORMAT_R32G32B32A32_SFLOAT,
 		VK_IMAGE_LAYOUT_GENERAL,
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -293,7 +398,10 @@ void vk::RayPass::BuildDescriptors()
 			CreateDescriptorBinding(6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
 			CreateDescriptorBinding(7, 300, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
 			CreateDescriptorBinding(8, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
-			CreateDescriptorBinding(9, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR)
+			CreateDescriptorBinding(9, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
+			CreateDescriptorBinding(10, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
+			CreateDescriptorBinding(11, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
+			CreateDescriptorBinding(12, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR)
 		};
 
 		m_descriptorSetLayout = CreateDescriptorSetLayout(context, bindings);
@@ -389,5 +497,39 @@ void vk::RayPass::BuildDescriptors()
 		bufferInfo.offset = 0;
 		bufferInfo.range = sizeof(RTX);
 		UpdateDescriptorSet(context, 9, bufferInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+	}
+
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		VkDescriptorImageInfo imageInfo = {
+			.sampler = VK_NULL_HANDLE,
+			.imageView = m_WorldPositionsTarget.imageView,
+			.imageLayout = VK_IMAGE_LAYOUT_GENERAL
+		};
+
+		UpdateDescriptorSet(context, 10, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	}
+
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+
+		VkDescriptorBufferInfo bufferInfo =
+		{
+			.buffer = m_Reservoirs.buffer,
+			.offset = 0,
+			.range = sizeof(ReservoirStorage)
+		};
+
+		UpdateDescriptorSet(context, 11, bufferInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+	}
+
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		VkDescriptorImageInfo imageInfo = {
+			.sampler = VK_NULL_HANDLE,
+			.imageView = m_InitialCandidates.imageView,
+			.imageLayout = VK_IMAGE_LAYOUT_GENERAL
+		};
+
+		UpdateDescriptorSet(context, 12, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	}
 }

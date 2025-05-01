@@ -509,19 +509,14 @@ void vk::Context::CreateLogicalDevice()
 
     VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures =
     {
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT,
-        .pNext = &scalarBlockFeatures
-    };
-
-    VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures_2 = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
-        .pNext = &indexingFeatures
+        .pNext = &scalarBlockFeatures,
+        .shaderSampledImageArrayNonUniformIndexing = VK_TRUE,
     };
-
 
     VkPhysicalDeviceFeatures2 deviceFeatures2{};
     deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-    deviceFeatures2.pNext = &indexingFeatures_2;
+    deviceFeatures2.pNext = &indexingFeatures;
     deviceFeatures2.features.samplerAnisotropy = VK_TRUE;
 
     VkDeviceCreateInfo deviceInfo = {};
@@ -547,7 +542,7 @@ void vk::Context::CreateAllocator()
     functions.vkGetPhysicalDeviceMemoryProperties = vkGetPhysicalDeviceMemoryProperties;
 
     VmaAllocatorCreateInfo allocInfo = {};
-    allocInfo.vulkanApiVersion = props.apiVersion;
+    allocInfo.vulkanApiVersion = VK_API_VERSION_1_3;
     allocInfo.physicalDevice = pDevice;
     allocInfo.device = device;
     allocInfo.instance = instance;

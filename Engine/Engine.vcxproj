@@ -107,6 +107,7 @@
     <ClInclude Include="..\src\ImGuiRenderer.hpp" />
     <ClInclude Include="..\src\Image.hpp" />
     <ClInclude Include="..\src\Light.hpp" />
+    <ClInclude Include="..\src\MotionVectors.hpp" />
     <ClInclude Include="..\src\Pipeline.hpp" />
     <ClInclude Include="..\src\PresentPass.hpp" />
     <ClInclude Include="..\src\RayPass.hpp" />
@@ -114,6 +115,7 @@
     <ClInclude Include="..\src\Renderer.hpp" />
     <ClInclude Include="..\src\Scene.hpp" />
     <ClInclude Include="..\src\ShadowMap.hpp" />
+    <ClInclude Include="..\src\Spatial.hpp" />
     <ClInclude Include="..\src\Utils.hpp" />
     <ClInclude Include="..\third_party\imgui\imconfig.h" />
     <ClInclude Include="..\third_party\imgui\imgui.h" />
@@ -136,12 +138,14 @@
     <ClCompile Include="..\src\History.cpp" />
     <ClCompile Include="..\src\ImGuiRenderer.cpp" />
     <ClCompile Include="..\src\Image.cpp" />
+    <ClCompile Include="..\src\MotionVectors.cpp" />
     <ClCompile Include="..\src\PresentPass.cpp" />
     <ClCompile Include="..\src\RayPass.cpp" />
     <ClCompile Include="..\src\RenderPass.cpp" />
     <ClCompile Include="..\src\Renderer.cpp" />
     <ClCompile Include="..\src\Scene.cpp" />
     <ClCompile Include="..\src\ShadowMap.cpp" />
+    <ClCompile Include="..\src\Spatial.cpp" />
     <ClCompile Include="..\src\Utils.cpp" />
     <ClCompile Include="..\src\main.cpp" />
     <ClCompile Include="..\third_party\imgui\imgui.cpp" />

@@ -39,7 +39,7 @@ namespace vk
 
 		uint32_t numIndices;
 		VmaAllocator allocator;
-		
+
 		// Swapchain
 		VkSwapchainKHR swapchain;
 		VkSwapchainKHR oldSwapchain;
