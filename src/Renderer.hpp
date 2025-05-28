@@ -26,7 +26,7 @@ namespace vk
 
 		void Destroy();
 
-		void Render();
+		void Render(double deltaTime);
 		void Update(double deltaTime);
 
 		// Should be moved out of renderer when we do better input/controls

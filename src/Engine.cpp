@@ -27,7 +27,7 @@ void vk::Engine::Shutdown()
 {
 	m_Renderer->Destroy();
 	m_Renderer.reset();
-	m_context.Destroy(); // Free vulkan device, allocator, window 
+	m_context.Destroy(); // Free vulkan device, allocator, window
 }
 
 void vk::Engine::Run()
@@ -48,10 +48,10 @@ void vk::Engine::Run()
 
 void vk::Engine::Update(double deltaTime)
 {
-	m_Renderer->Update(deltaTime);
+	//m_Renderer->Update(deltaTime);
 }
 
 void vk::Engine::Render()
 {
-	m_Renderer->Render();
+	m_Renderer->Render(deltaTime);
 }

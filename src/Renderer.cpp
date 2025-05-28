@@ -93,7 +93,7 @@ vk::Renderer::Renderer(Context& context) : context{context}
 		m_scene->AddLightSource(spotLight);
 	}
 
-	// Models should not all be loaded
+	// Models should now all be loaded
 	// We have the data to build materials
 	m_materialManager.BuildMaterials(context);
 
@@ -105,11 +105,13 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	m_ForwardPass = std::make_unique<ForwardPass>(context, m_ShadowMap->GetRenderTarget(), m_DepthPrepass->GetRenderTarget(), m_scene, m_camera);
 
 	m_RayPass		= std::make_unique<RayPass>(context, m_scene, m_camera);
-	m_SpatialPass	= std::make_unique<Spatial>(context, m_RayPass->GetInitialCandidates());
+	m_SpatialPass	= std::make_unique<Spatial>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates());
 	m_HistoryPass   = std::make_unique<History>(context, m_RayPass->GetRenderTarget());
 
 	m_CompositePass = std::make_unique<Composite>(context, m_RayPass->GetRenderTarget(), m_HistoryPass->GetRenderTarget(), m_HistoryPass->GetHistoryImages());
-	m_PresentPass   = std::make_unique<PresentPass>(context, m_CompositePass->GetRenderTarget(), m_RayPass->GetRenderTarget());
+
+	// Currently passing the spatial pass result to the composite to display, switch to RayPass to show initial candidates
+	m_PresentPass   = std::make_unique<PresentPass>(context, m_CompositePass->GetRenderTarget(), m_SpatialPass->GetRenderTarget());
 
 	ImGuiRenderer::Initialize(context);
 }
@@ -243,9 +245,11 @@ void vk::Renderer::AllocateCommandBuffers()
 	}
 }
 
-void vk::Renderer::Render()
+void vk::Renderer::Render(double deltaTime)
 {
 	vkWaitForFences(context.device, 1, &m_Fences[vk::currentFrame], VK_TRUE, UINT64_MAX);
+
+	Update(deltaTime);
 
 	uint32_t index;
 	VkResult getImageIndex = vkAcquireNextImageKHR(context.device, context.swapchain, UINT64_MAX, m_imageAvailableSemaphores[vk::currentFrame], VK_NULL_HANDLE, &index);
@@ -363,6 +367,7 @@ void vk::Renderer::Update(double deltaTime)
 
 	ImGuiRenderer::Update(m_scene, m_camera);
 	m_RayPass->Update();
+	m_SpatialPass->Update();
 	m_HistoryPass->Update();
 	// Update passes
 	m_ShadowMap->Update();

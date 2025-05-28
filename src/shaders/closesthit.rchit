@@ -579,12 +579,11 @@ int RandomIndex(uint seed, in Candidate candidates[CANDIDATE_MAX], in float tota
 
 void ComputeCandidatesWeights(in uint seed, vec3 pos, vec3 n, inout Candidate candidates[CANDIDATE_MAX], inout float totalWeights)
 {
-    const float rcpUniformDistributionWeight = float(NUM_LIGHTS); // PDF of uniform distribution = 1 / total number of lights. Reciporal of that PDF is the light count e.g. 1 / 10 = 0.1 -> rcp = 1 / (1 / 10) = 10.0
+    const float rcpUniformDistributionWeight = float(NUM_LIGHTS); // PDF of uniform distribution = 1 / total number of lights. Reciporal of that PDF is the light count e.g. if max lights = 10, then: 1 / 10 = 0.1 -> rcp = 1 / (1 / 10) = 10.0
     const float rcpM = 1.0 / float(CANDIDATE_MAX);
 
     // Picking any light direction has a uniform distribution
     for (int i = 0; i < CANDIDATE_MAX; i++) {
-
         // Pick a random light from all lights
         int randomLightIndex = int(GetRandomNumber(seed) * float(NUM_LIGHTS));
         Light light = lightData.lights[randomLightIndex];
@@ -597,7 +596,7 @@ void ComputeCandidatesWeights(in uint seed, vec3 pos, vec3 n, inout Candidate ca
         candidates[i].intensity = 1000.0f * att;
 
         // Compute RIS weight for this candidate light
-        float F_x = max(dot(n, candidates[i].lightDir), 0.0) + 0.001; // Simplied F(x) for weighting. Not sure if need to compute entir BRDF * cosine * ....?
+        float F_x = max(dot(n, candidates[i].lightDir), 0.001); // Simplied F(x) for weighting. Not sure if need to compute entir BRDF * cosine * ....?
         candidates[i].Fx = F_x; // The target function F(x) that PDF(X) approximates better with more candidates. Using lambert cosine term but this can be other importance sampling methods
         float candidateRISWeight = rcpM * F_x * rcpUniformDistributionWeight;
         candidates[i].weight = candidateRISWeight; // Move 1.0 / M when computing weight as suggested
@@ -640,12 +639,14 @@ vec3 RISSampling(vec3 pos, vec3 n, vec3 albedo)
         // Evaluate the unbiased constribuion weight W_x
         float W_x = rcpPDF * (totalWeights);
 
+        imageStore(ReservoirsImage, ivec2(gl_LaunchIDEXT.xy), vec4(selectedIndex, W_x, 0.0, 0.0));
+
         // Compute direct lighting using the elected light source
         //vec3 DiffuseBRDF(vec3 normal, vec3 position, vec3 albedo, vec3 LightDirection, vec3 LightColour, float LightIntensity)
 
         float Visibility = CastShadowRay(pos, n, LightSource.lightDir, length(LightSource.light.LightPosition.xyz - pos) - 0.001);
-        vec3 directLighting = DiffuseBRDF(n, pos, albedo, LightSource.lightDir.xyz, LightSource.light.LightColour.rgb, LightSource.intensity);
-        //vec3 directLighting = computeDirectLighting(pos, n, albedo, LightSource.lightDir, LightSource.intensity, LightSource.light.LightColour.rgb) * W_x * Visibility;
+        //vec3 directLighting = DiffuseBRDF(n, pos, albedo, LightSource.lightDir.xyz, LightSource.light.LightColour.rgb, LightSource.intensity);
+        vec3 directLighting = computeDirectLighting(pos, n, albedo, LightSource.lightDir, LightSource.intensity, LightSource.light.LightColour.rgb) * W_x * Visibility;
         radiance += throughput * directLighting;
     }
 
@@ -653,6 +654,8 @@ vec3 RISSampling(vec3 pos, vec3 n, vec3 albedo)
     return radiance;
 }
 
+// @NOTE: Reservoir can also store the PDF. This is useful if we have multiple PDF which you draw samples from.
+// This is needed for MIS which will need to be computed if using multiple PDF in both spatial and temporal
 struct Reservoir
 {
     Candidate Y;
@@ -661,7 +664,7 @@ struct Reservoir
     int index;
 };
 
-void update(uint seed, inout Reservoir reservoir, in Candidate xi, in float xi_weight, int index)
+void update(inout uint seed, inout Reservoir reservoir, in Candidate xi, in float xi_weight, int index)
 {
     reservoir.totalWeights = reservoir.totalWeights + xi_weight;
     float r = GetRandomNumber(seed);
@@ -672,7 +675,7 @@ void update(uint seed, inout Reservoir reservoir, in Candidate xi, in float xi_w
     }
 }
 
-void RISReservoir(inout Reservoir reservoir, uint seed, vec3 pos, vec3 n, inout Candidate candidates[CANDIDATE_MAX], vec3 albedo)
+void RISReservoir(inout Reservoir reservoir, inout uint seed, vec3 pos, vec3 n, inout Candidate candidates[CANDIDATE_MAX], vec3 albedo)
 {
     const float rcpUniformDistributionWeight = float(NUM_LIGHTS); // PDF of uniform distribution = 1 / total number of lights. Reciporal of that PDF is the light count e.g. 1 / 10 = 0.1 -> rcp = 1 / (1 / 10) = 10.0
     const float rcpM = 1.0 / float(CANDIDATE_MAX);
@@ -693,12 +696,24 @@ void RISReservoir(inout Reservoir reservoir, uint seed, vec3 pos, vec3 n, inout 
         // Compute RIS weight for this candidate light
         float F_x = max(dot(n, candidates[i].lightDir), 0.001) * candidates[i].intensity; // Simplied F(x) for weighting. Not sure if need to compute entir BRDF * cosine * ....?
         candidates[i].Fx = F_x; // The target function F(x) that PDF(X) approximates better with more candidates. Using lambert cosine term but this can be other importance sampling methods
-        candidates[i].weight = rcpM * F_x * rcpUniformDistributionWeight; // Move 1.0 / M when computing weight as suggested
+        candidates[i].weight = rcpM * F_x * rcpUniformDistributionWeight; // Move 1.0 / M to here when computing weight as suggested
 
-        update(seed, reservoir, candidates[i], candidates[i].weight, i);
+        update(seed, reservoir, candidates[i], candidates[i].weight, randomLightIndex);
     }
 }
 
+
+/*
+
+Weighting in RIS works slightly differently to tranditional. While weighting is used, its not a PDF.
+Instead we have an unbiased contribution weight called W_x which replaces 1/P(X).
+A single sample X can have many valid W_x depending on the initial candidates samples.
+This is because the initial candidates are chosen at random and for each set of them, any sample will
+have a different weighing relative to them.
+This means W_x is not a determiistic function of X, its a random variable. Since they're unbiased,
+1/P(X) can be replaced by W_x.
+
+*/
 vec3 RISReservoirSampling(vec3 pos, vec3 n, vec3 albedo)
 {
     uint seed = uint(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x) + gl_LaunchIDEXT.x;
@@ -729,14 +744,14 @@ vec3 RISReservoirSampling(vec3 pos, vec3 n, vec3 albedo)
         // Compute the light weight to prevent bias
         // W_x = (sum(w_i) / M) / pdf(x)
         // Written as: 1 / pdf(x) * (1 / m * sum(w_i)), but remember 1 / pdf(x) and 1 / m is the same as dividing by them since 1 / x is rcp
-        float rcpPDF = 1.0 / LightSource.Fx;
+        float rcpPDF = 1.0 / LightSource.Fx; //  float(NUM_LIGHTS);
 
         // This is debug to ensure its valid, remove eventually
         if (isinf(rcpPDF))
             return vec3(1.0, 0.0, 1.0);
 
         // Evaluate the unbiased constribuion weight W_x
-        // We moved rcpM = 1 / float(CANDIDATE_MAX) when computing weight for each candidate as suggested by paper
+        // We moved rcpM = 1 / float(CANDIDATE_MAX) to func RISReservoir which is computing weight for each candidate as suggested by paper
         float W_x = rcpPDF * (reservoir.totalWeights);
         reservoir.W_y = W_x;
 
@@ -746,7 +761,6 @@ vec3 RISReservoirSampling(vec3 pos, vec3 n, vec3 albedo)
         // once this is done, we pass it to another pass which will then spatially reuse and from there pass it to the next RT pass for it to be used
         // and select reservoir for current pixel
         imageStore(ReservoirsImage, ivec2(gl_LaunchIDEXT.xy), vec4(reservoir.index, reservoir.W_y, 0.0, 0.0));
-
 
         // Compute direct lighting using the elected light source
         float Visibility = CastShadowRay(pos, n, LightSource.lightDir, length(LightSource.light.LightPosition.xyz - pos) - 0.001);
