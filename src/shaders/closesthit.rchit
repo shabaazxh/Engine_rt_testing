@@ -134,7 +134,7 @@ float GetRandomNumber(inout uint seed)
 vec2 GetRandomHashValue(inout uint seed)
 {
     float u = GetRandomNumber(seed) * 2.0 - 1.0;
-    float v = GetRandomNumber(seed) * 2.0 - 1.0; // Seed is modified in-place
+    float v = GetRandomNumber(seed) * 2.0 - 1.0; // @Note: Seed is modified in place
     return vec2(u, v);
 }
 

@@ -116,6 +116,14 @@ float GetRandomNumber(inout uint seed)
     return float(Xorshift(seed)) * (1.f / 4294967296.f);
 }
 
+vec2 GetRandomHashValue01(inout uint seed)
+{
+    float u = GetRandomNumber(seed);
+    float v = GetRandomNumber(seed);
+    return vec2(u, v);
+}
+
+
 vec2 GetRandomHashValue(inout uint seed)
 {
     float u = GetRandomNumber(seed) * 2.0 - 1.0;
@@ -212,7 +220,7 @@ void update(uint seed, inout Reservoir reservoir, in Candidate xi, in float xi_w
 void RISReservoir(inout Reservoir reservoir, uint seed, vec3 pos, vec3 n, inout Candidate candidates[CANDIDATE_MAX], vec3 albedo)
 {
     const float rcpUniformDistributionWeight = float(NUM_LIGHTS); // PDF of uniform distribution = 1 / total number of lights. Reciporal of that PDF is the light count e.g. 1 / 10 = 0.1 -> rcp = 1 / (1 / 10) = 10.0
-    const float rcpM = 1.0 / float(CANDIDATE_MAX);
+    const float rcpM = 1.0 / float(CANDIDATE_MAX); // This is MIS weight. We are using uniform sampling so its 1 / CANDIDATE_MAX. This is the same as 1 / M in the paper, where M is the number of candidates (8 in this case).
 
     // Picking any light direction has a uniform distribution
     for (int i = 0; i < CANDIDATE_MAX; i++) {
@@ -230,7 +238,7 @@ void RISReservoir(inout Reservoir reservoir, uint seed, vec3 pos, vec3 n, inout 
         // Compute RIS weight for this candidate light
         float F_x = max(dot(n, candidates[i].lightDir), 0.001) * candidates[i].intensity; // Simplied F(x) for weighting. Not sure if need to compute entir BRDF * cosine * ....?
         candidates[i].Fx = F_x; // The target function F(x) that PDF(X) approximates better with more candidates. Using lambert cosine term but this can be other importance sampling methods
-        candidates[i].weight = rcpM * F_x * rcpUniformDistributionWeight; // Move 1.0 / M when computing weight as suggested
+        candidates[i].weight = rcpM * F_x * rcpUniformDistributionWeight; // Move 1.0 / M when computing weight. This is w_i (on page 9, 3.2)
 
         update(seed, reservoir, candidates[i], candidates[i].weight, F_x, i);
     }
@@ -311,6 +319,28 @@ vec3 Verify(vec3 n, vec3 pos, vec3 albedo)
     return radiance;
 }
 
+float RadicalInverse_VdC(uint bits)
+{
+    bits = (bits << 16u) | (bits >> 16u);
+    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+    return float(bits) * 2.3283064365386963e-10; // / 0x100000000
+}
+
+vec2 Hammersley(uint i, uint N)
+{
+    return vec2(float(i)/float(N), RadicalInverse_VdC(i));
+}
+
+vec2 DiskPoint(float sampleRadius, float x, float y)
+{
+	float r = sampleRadius * sqrt(x);
+	float theta = y * (2.0 * PI);
+	return vec2(r * cos(theta), r * sin(theta));
+}
+
 
 void update(uint seed, inout Reservoir reservoir, in float xi_weight, in float f_x, int index)
 {
@@ -331,39 +361,32 @@ void update(uint seed, inout Reservoir reservoir, in float xi_weight, in float f
 // All these initial candidates used a uniform distribution i.e 1 / NUM_LIGHTS
 Reservoir MISWeighting(vec3 current_pixel_reservoir_data, inout uint seed, vec3 n, vec3 pos)
 {
+    const int M = 5; // We have 5 samples including our current pixel one
     // Build a new reservoir to update by resampling neighbouring pixels
     Reservoir reservoir;
     reservoir.W_y = 0.0f;
     reservoir.index = -1; // No index selected yet, will be updated later
     reservoir.totalWeights = 0.0f;
 
-    Reservoir neighbouring_reservoirs[5]; // We will find 4 neighbours and fill this array
+    Reservoir neighbouring_reservoirs[M]; // We will find 4 neighbours and fill this array
 
     // We know this is is the current pixel
     // We can move +1, -1 in X, -X, Y, -Y to get the 4 neighbouring pixel coordinates and sample
     ivec2 current_pixel = ivec2(gl_LaunchIDEXT.xy);
-
     // Current pixel
     neighbouring_reservoirs[0].W_y = current_pixel_reservoir_data.y; // Current pixel weight
     neighbouring_reservoirs[0].index = int(current_pixel_reservoir_data.x); // Current pixel index
 
-    // Sample the neighbouring pixels
-    // Right
-    neighbouring_reservoirs[1].W_y = texelFetch(InitialCandidatesImage, current_pixel + ivec2(1, 0), 0).y;
-    neighbouring_reservoirs[1].index = int(texelFetch(InitialCandidatesImage, current_pixel + ivec2(1, 0), 0).x);
+    // The image ends up with nan values hence black
+    for(uint i = 1; i < M; i++)
+    {
+        vec2 rand = Hammersley(i, M - 1);
+        vec2 random = GetRandomHashValue01(seed);
+        vec2 offset = DiskPoint(rtx.numPastFrames, random.x, random.y); // rtx.numPastFrame is controlling the radius of the disk
 
-    // Left
-    neighbouring_reservoirs[2].W_y = texelFetch(InitialCandidatesImage, current_pixel + ivec2(-1, 0), 0).y;
-    neighbouring_reservoirs[2].index = int(texelFetch(InitialCandidatesImage, current_pixel + ivec2(-1, 0), 0).x);
-
-    // Up
-    neighbouring_reservoirs[3].W_y = texelFetch(InitialCandidatesImage, current_pixel + ivec2(0, 1), 0).y;
-    neighbouring_reservoirs[3].index = int(texelFetch(InitialCandidatesImage, current_pixel + ivec2(0, 1), 0).x);
-
-    // Down
-    neighbouring_reservoirs[4].W_y = texelFetch(InitialCandidatesImage, current_pixel + ivec2(0, -1), 0).y;
-    neighbouring_reservoirs[4].index = int(texelFetch(InitialCandidatesImage, current_pixel + ivec2(0, -1), 0).x);
-
+        neighbouring_reservoirs[i].W_y = texelFetch(InitialCandidatesImage, current_pixel + ivec2(round(offset)), 0).y;
+        neighbouring_reservoirs[i].index = int(texelFetch(InitialCandidatesImage, current_pixel + ivec2(round(offset)), 0).x);
+    }
 
     // We have sampled the neighbouring pixels, we now perform MIS to weight them
     // For each of the neighbouring pixels, we compute an MIS weight see how much is contributes at this pixel
@@ -371,7 +394,6 @@ Reservoir MISWeighting(vec3 current_pixel_reservoir_data, inout uint seed, vec3 
     // MIS is computed as m_i(x) = p_i(x) / sum_{j=1}^M p_j(x) where p_i(x) is the PDF (BRDF etc.) of the i-th candidate and M is the number of candidates (5 in this case, 1 for current pixel and 4 for neighbours).
     // For each of the reservoir neighbours, we compute the MIS weight
     const float uniform_PDF_weight = 1.0 / float(NUM_LIGHTS);
-    const float M = 5; // We have 5 samples including our current pixel one
     const float sumCandidatePDFs = M * uniform_PDF_weight; // Since M candidates all were selected using uniform distribution. The sum of the PDFs of the candidates is M * 1 / NUM_LIGHTS = M / NUM_LIGHTS
     const float rcpM = 1.0 / float(M); // 1 / M, where M is the number of candidates (5 in this case)
     for(int i = 0; i < M; i++)
@@ -433,8 +455,8 @@ vec3 Spatial(vec3 n, vec3 pos, vec3 albedo)
     float target_function = 1.0 / reservoir.Fx; // Reciprocal of the target function F(x) that PDF(X) approximates better with more candidates.
 
     // This is debug to ensure its valid, remove eventually
-    if (isinf(target_function))
-        return vec3(1.0, 0.0, 1.0);
+    if (isinf(target_function) || isnan(target_function))
+        return vec3(0.0, 0.0, 1.0);
 
     // Evaluate the unbiased constribuion weight W_x
     // We moved rcpM = 1 / float(M) into MISWeighting function
@@ -491,6 +513,7 @@ void main()
     {
         rayPayLoad.colour = vec3(Verify(worldNormal, worldPos, albedo));
     } else {
-        rayPayLoad.colour = vec3(Spatial(worldNormal, worldPos, albedo));
+        vec3 radiance = vec3(Spatial(worldNormal, worldPos, albedo));
+        rayPayLoad.colour = radiance;
     }
 }
