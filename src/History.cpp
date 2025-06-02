@@ -6,27 +6,12 @@
 vk::History::History(Context& context, const Image& renderedImage) : context{context}, renderedImage{renderedImage}
 {
 	m_FrameToWriteTo = currentFrame;
-	m_historyImages.resize(5);
 	m_width = context.extent.width;
 	m_height = context.extent.height;
 
 	m_rtxSettingsUBO.resize(MAX_FRAMES_IN_FLIGHT);
 	for (auto& buffer : m_rtxSettingsUBO)
 		buffer = CreateBuffer("HistoryRTXUBO", context, sizeof(RTX), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
-
-
-	// Create the history buffer images
-	for (size_t i = 0; i < 5; i++)
-	{
-		m_historyImages[i] = CreateImageTexture2D(
-			"history_image " + std::to_string(i),
-			context,
-			m_width, m_height,
-			VK_FORMAT_R32G32B32A32_SFLOAT,
-			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-			VK_IMAGE_ASPECT_COLOR_BIT
-		);
-	}
 
 	m_RenderTarget = CreateImageTexture2D(
 		"History_Accum_RT",
@@ -65,6 +50,47 @@ void vk::History::Update()
 	m_rtxSettingsUBO[currentFrame].WriteToBuffer(&rtxSettings, sizeof(RTX));
 }
 
+void vk::History::Resize()
+{
+	m_width = context.extent.width;
+	m_height = context.extent.height;
+
+	m_RenderTarget.Destroy(context.device);
+
+	m_RenderTarget = CreateImageTexture2D(
+		"History_Accum_RT",
+		context,
+		m_width,
+		m_height,
+		VK_FORMAT_R16G16B16A16_SFLOAT,
+		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		VK_IMAGE_ASPECT_COLOR_BIT,
+		1
+	);
+
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		VkDescriptorImageInfo imgInfo = {
+			.sampler = repeatSampler,
+			.imageView = renderedImage.imageView,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL // VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+
+		UpdateDescriptorSet(context, 0, imgInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	}
+
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		VkDescriptorImageInfo imgInfo = {
+			.sampler = VK_NULL_HANDLE,
+			.imageView = m_RenderTarget.imageView,
+			.imageLayout = VK_IMAGE_LAYOUT_GENERAL
+		};
+
+		UpdateDescriptorSet(context, 1, imgInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	}
+}
+
 void vk::History::Execute(VkCommandBuffer cmd)
 {
 
@@ -90,11 +116,10 @@ void vk::History::Execute(VkCommandBuffer cmd)
 
 void vk::History::Destroy()
 {
-	for (size_t i = 0; i < 5; i++)
-	{
-		m_historyImages[i].Destroy(context.device);
-	}
-	// TODO: need to destroy framebuffer, renderpass, pipeline etc
+	m_RenderTarget.Destroy(context.device);
+	vkDestroyPipeline(context.device, m_pipeline, nullptr);
+	vkDestroyPipelineLayout(context.device, m_pipelineLayout, nullptr);
+	vkDestroyDescriptorSetLayout(context.device, m_descriptorSetLayout, nullptr);
 }
 
 void vk::History::CreatePipeline()

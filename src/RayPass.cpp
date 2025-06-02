@@ -130,6 +130,7 @@ void vk::RayPass::Resize()
 
 	m_RenderTarget.Destroy(context.device);
 	m_WorldPositionsTarget.Destroy(context.device);
+	m_InitialCandidates.Destroy(context.device);
 
 	m_RenderTarget = CreateImageTexture2D(
 		"RayPassRT",
@@ -144,6 +145,17 @@ void vk::RayPass::Resize()
 
 	m_WorldPositionsTarget = CreateImageTexture2D(
 		"RayPassRT_WorldPositions",
+		context,
+		m_width,
+		m_height,
+		VK_FORMAT_R32G32B32A32_SFLOAT,
+		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		VK_IMAGE_ASPECT_COLOR_BIT,
+		1
+	);
+
+	m_InitialCandidates = CreateImageTexture2D(
+		"InitialCandidates_RT",
 		context,
 		m_width,
 		m_height,
@@ -172,6 +184,15 @@ void vk::RayPass::Resize()
 			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0,
 			VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
 		);
+
+		ImageTransition(
+			cmd,
+			m_InitialCandidates.image,
+			VK_FORMAT_R32G32B32A32_SFLOAT,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0,
+			VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+		);
 	});
 
 	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
@@ -183,6 +204,28 @@ void vk::RayPass::Resize()
 		};
 
 		UpdateDescriptorSet(context, 1, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	}
+
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		VkDescriptorImageInfo imageInfo = {
+			.sampler = VK_NULL_HANDLE,
+			.imageView = m_WorldPositionsTarget.imageView,
+			.imageLayout = VK_IMAGE_LAYOUT_GENERAL
+		};
+
+		UpdateDescriptorSet(context, 10, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	}
+
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		VkDescriptorImageInfo imageInfo = {
+			.sampler = VK_NULL_HANDLE,
+			.imageView = m_InitialCandidates.imageView,
+			.imageLayout = VK_IMAGE_LAYOUT_GENERAL
+		};
+
+		UpdateDescriptorSet(context, 12, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	}
 }
 

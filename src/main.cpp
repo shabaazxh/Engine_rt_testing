@@ -20,8 +20,6 @@
 #endif
 
 #include <iostream>
-
-// My includes
 #include "Utils.hpp"
 #include "Context.hpp"
 #include "Engine.hpp"
@@ -47,6 +45,3 @@ catch( std::exception const& eErr )
 	std::fprintf( stderr, "Error: %s\n", eErr.what() );
 	return 1;
 }
-
-
-//EOF vim:syntax=cpp:foldmethod=marker:ts=4:noexpandtab: 

@@ -102,13 +102,19 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	// Renderer passes
 	m_ShadowMap	    = std::make_unique<ShadowMap>(context, m_scene);
 	m_DepthPrepass  = std::make_unique<DepthPrepass>(context, m_scene, m_camera);
-	m_ForwardPass = std::make_unique<ForwardPass>(context, m_ShadowMap->GetRenderTarget(), m_DepthPrepass->GetRenderTarget(), m_scene, m_camera);
+	m_ForwardPass   = std::make_unique<ForwardPass>(context, m_ShadowMap->GetRenderTarget(), m_DepthPrepass->GetRenderTarget(), m_scene, m_camera);
 
+	// Create the initial candidates using RIS
 	m_RayPass		= std::make_unique<RayPass>(context, m_scene, m_camera);
-	m_SpatialPass	= std::make_unique<Spatial>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates());
-	m_HistoryPass   = std::make_unique<History>(context, m_RayPass->GetRenderTarget());
 
-	m_CompositePass = std::make_unique<Composite>(context, m_RayPass->GetRenderTarget(), m_HistoryPass->GetRenderTarget(), m_HistoryPass->GetHistoryImages());
+	// History pass goes first to temporally reuse past frame reservoirs
+	m_HistoryPass = std::make_unique<History>(context, m_RayPass->GetRenderTarget());
+	// Spatial pass will take in the temporal resampled reservoir results and spatially reuse to resample
+	m_SpatialPass	= std::make_unique<Spatial>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates());
+
+	// A final shading pass should go here? Which takes in the Spatial reuse reservoirs and computes lighting. This could perhaps
+	// Happen in the spatial pass? Since we can spatially reuse for the current pixel and then use that updated reservoir for shading output from spatial pass
+	m_CompositePass = std::make_unique<Composite>(context, m_RayPass->GetRenderTarget(), m_HistoryPass->GetRenderTarget());
 
 	// Currently passing the spatial pass result to the composite to display, switch to RayPass to show initial candidates
 	m_PresentPass   = std::make_unique<PresentPass>(context, m_CompositePass->GetRenderTarget(), m_SpatialPass->GetRenderTarget());
@@ -259,6 +265,8 @@ void vk::Renderer::Render(double deltaTime)
 		// Recreate swapchain
 		context.RecreateSwapchain();
 		m_RayPass->Resize();
+		m_HistoryPass->Resize();
+		m_SpatialPass->Resize();
 		m_DepthPrepass->Resize();
 		m_ShadowMap->Resize();
 		m_ForwardPass->Resize();
@@ -286,8 +294,8 @@ void vk::Renderer::Render(double deltaTime)
 		if (vk::renderType == RenderType::RAYPASS)
 		{
 			m_RayPass->Execute(cmd);
-			m_SpatialPass->Execute(cmd);
 			m_HistoryPass->Execute(cmd);
+			m_SpatialPass->Execute(cmd);
 		}
 		else
 		{
@@ -350,6 +358,8 @@ void vk::Renderer::Present(uint32_t imageIndex)
 		// Recreate the swapchain
 		context.RecreateSwapchain();
 		m_RayPass->Resize();
+		m_HistoryPass->Resize();
+		m_SpatialPass->Resize();
 		m_DepthPrepass->Resize();
 		m_ShadowMap->Resize();
 		m_ForwardPass->Resize();

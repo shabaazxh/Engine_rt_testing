@@ -12,13 +12,11 @@ namespace vk
 	public:
 		History(Context& context, const Image& renderedImage);
 		void Execute(VkCommandBuffer cmd);
-
-
-		std::vector<Image>& GetHistoryImages() { return m_historyImages; }
 		Image& GetRenderTarget() { return m_RenderTarget; }
 
 		void Destroy();
 		void Update();
+		void Resize();
 	private:
 		void CreatePipeline();
 		void CreateRenderPass();
@@ -33,8 +31,6 @@ namespace vk
 		uint32_t m_width;
 		uint32_t m_height;
 
-		std::vector<Image> m_historyImages;
-		VkFramebuffer m_historyFramebuffers[5];
 		VkRenderPass m_renderPass;
 
 		Image m_RenderTarget;

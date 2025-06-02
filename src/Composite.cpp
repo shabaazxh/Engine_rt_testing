@@ -5,11 +5,10 @@
 #include "Buffer.hpp"
 #include "RenderPass.hpp"
 
-vk::Composite::Composite(Context& context, Image& LightingPass, Image& BloomPass, const std::vector<Image>& historyImages) :
+vk::Composite::Composite(Context& context, Image& LightingPass, Image& BloomPass) :
 	context{ context },
 	LightingPass{ LightingPass },
 	BloomPass{ BloomPass },
-	historyImages{historyImages},
 	m_Pipeline{ VK_NULL_HANDLE },
 	m_PipelineLayout{ VK_NULL_HANDLE },
 	m_descriptorSetLayout{ VK_NULL_HANDLE },
@@ -243,19 +242,5 @@ void vk::Composite::BuildDescriptors()
 		};
 
 		UpdateDescriptorSet(context, 1, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-	}
-
-	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
-	{
-		for (size_t image = 0; image < historyImages.size(); image++)
-		{
-			VkDescriptorImageInfo imgInfo = {
-				.sampler = repeatSampler,
-				.imageView = historyImages[image].imageView,
-				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL // VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-			};
-
-			UpdateDescriptorSet(context, 2, imgInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-		}
 	}
 }
