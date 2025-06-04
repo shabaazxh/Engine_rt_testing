@@ -73,12 +73,14 @@ layout(set = 0, binding = 9) uniform RTXSettings
 } rtx;
 
 layout(set = 0, binding = 10) uniform sampler2D InitialCandidatesImage;
+layout(set = 0, binding = 11, rgba32f) uniform image2D SpatialReservoirStore;
+layout(set = 0, binding = 12) uniform sampler2D TemporalReuseReservoirs;
 
 struct RayPayLoad
 {
     vec3 pos;
     vec3 dir;
-    vec3 colour;
+    vec4 colour;
     vec3 hitnormal;
     vec3 hitpos;
     float hit;
@@ -202,6 +204,7 @@ struct Reservoir
     float totalWeights;
     float Fx;
     int index;
+    int M;
 };
 
 void update(uint seed, inout Reservoir reservoir, in Candidate xi, in float xi_weight, in float f_x, int index);
@@ -423,20 +426,22 @@ Reservoir MISWeighting(vec3 current_pixel_reservoir_data, inout uint seed, vec3 
 }
 
 
-vec3 Spatial(vec3 n, vec3 pos, vec3 albedo)
+vec4 Spatial(vec3 n, vec3 pos, vec3 albedo)
 {
     uint seed = uint(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x) + gl_LaunchIDEXT.x;
     seed *= rtx.frameIndex;
     vec3 throughput = vec3(1.0);
     uint pixelIndex = gl_LaunchIDEXT.y * 1280 + gl_LaunchIDEXT.x;
-    vec3 pixelReservoir = texelFetch(InitialCandidatesImage, ivec2(gl_LaunchIDEXT.xy), 0).rgb;
+    vec4 pixelReservoir = texelFetch(TemporalReuseReservoirs, ivec2(gl_LaunchIDEXT.xy), 0).rgba;
 
-    // Current pixels reservoir
-    // Reservoir reservoir;
-    // reservoir.W_y = W_y;
-    // reservoir.index = index;
+    // Temporarily turn off spatial reuse so we just output whatever the temporal pass did
+    // Reservoir reservoir = MISWeighting(pixelReservoir, seed, n, pos);
 
-    Reservoir reservoir = MISWeighting(pixelReservoir, seed, n, pos);
+    Reservoir reservoir;
+    reservoir.W_y = pixelReservoir.y;
+    reservoir.index = int(pixelReservoir.x);
+    reservoir.totalWeights = pixelReservoir.z;
+    reservoir.Fx = (pixelReservoir.w); // This is the F(x) value computed in the temporal pass we can use it directly here
 
     // Fetch the neighbouring reservoirs, compute MIS and update the reservoir
     // MISWeighting(reservoir, seed, n, pos);
@@ -445,29 +450,30 @@ vec3 Spatial(vec3 n, vec3 pos, vec3 albedo)
     // Use the index from the reservoir to fetch the light data
     Light L = lightData.lights[reservoir.index];
 
-
     // Compute lighting using this light source
     vec3 LightDir = normalize(L.LightPosition.xyz - pos);
     float dist = length(L.LightPosition.xyz - pos);
     float att = 1.0 / (dist * dist);
     float intensity = 1000.0f * att;
-
-    float target_function = 1.0 / reservoir.Fx; // Reciprocal of the target function F(x) that PDF(X) approximates better with more candidates.
+    // float target_function = 1.0 / reservoir.Fx; // Reciprocal of the target function F(x) that PDF(X) approximates better with more candidates.
 
     // This is debug to ensure its valid, remove eventually
-    if (isinf(target_function) || isnan(target_function))
-        return vec3(0.0, 0.0, 1.0);
+    //  if (isinf(target_function) || isnan(target_function))
+         // return vec4(0.0, 0.0, 1.0, 1.0);
 
     // Evaluate the unbiased constribuion weight W_x
     // We moved rcpM = 1 / float(M) into MISWeighting function
-    float W_x = target_function * reservoir.totalWeights;
-    reservoir.W_y = W_x;
+    // float W_x = target_function * reservoir.totalWeights;
+    // reservoir.W_y = W_x;
+
+    // Write the reservoir for the current pixel to the reservoir image
+    imageStore(SpatialReservoirStore, ivec2(gl_LaunchIDEXT.xy), vec4(reservoir.index, reservoir.W_y, reservoir.totalWeights, reservoir.Fx));
 
     float Visibility = CastShadowRay(pos, n, LightDir, dist - 0.001);
     vec3 directLighting = computeDirectLighting(pos, n, albedo, LightDir, intensity, L.LightColour.rgb);
     vec3 radiance = throughput * directLighting * reservoir.W_y * Visibility;
 
-    return radiance;
+    return vec4(radiance, 1.0);
 }
 
 
@@ -511,9 +517,9 @@ void main()
     //vec3 DirectLight = NaiveDirectLighting(worldPos, worldNormal, albedo);
     if(rtx.bounces == 1)
     {
-        rayPayLoad.colour = vec3(Verify(worldNormal, worldPos, albedo));
+        rayPayLoad.colour = vec4(Verify(worldNormal, worldPos, albedo), 1.0);
     } else {
-        vec3 radiance = vec3(Spatial(worldNormal, worldPos, albedo));
-        rayPayLoad.colour = radiance;
+        //vec3 radiance = vec3(Spatial(worldNormal, worldPos, albedo));
+        rayPayLoad.colour = Spatial(worldNormal, worldPos, albedo);
     }
 }

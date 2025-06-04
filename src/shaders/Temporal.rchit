@@ -81,7 +81,7 @@ struct RayPayLoad
 {
     vec3 pos;
     vec3 dir;
-    vec3 colour;
+    vec4 colour;
     vec3 hitnormal;
     vec3 hitpos;
     float hit;
@@ -181,6 +181,7 @@ struct Reservoir
     float totalWeights;
     float Fx;
     int index;
+    int M;
 };
 
 void update(uint seed, inout Reservoir reservoir, in Candidate xi, in float xi_weight, in float f_x, int index);
@@ -332,94 +333,73 @@ void update(uint seed, inout Reservoir reservoir, in float xi_weight, in float f
 // A different PDF compared to the others thus, MIS is needed to compute a balance heuristic.
 
 // All these initial candidates used a uniform distribution i.e 1 / NUM_LIGHTS
-Reservoir ComputeTemporal(vec3 current_pixel_reservoir_data, inout uint seed, vec3 n, vec3 pos)
+Reservoir ComputeTemporal(vec4 current_pixel_reservoir_data, inout uint seed, vec3 n, vec3 pos)
 {
-    // Build a new reservoir to update by resampling neighbouring pixels
+    // Init a reservoir with the current pixel reservoir data
     Reservoir reservoir;
-    reservoir.W_y = 0.0f;
-    reservoir.index = -1; // No index selected yet, will be updated later
-    reservoir.totalWeights = 0.0f;
+    reservoir.W_y = current_pixel_reservoir_data.y;
+    reservoir.index = int(current_pixel_reservoir_data.x); // No index selected yet, will be updated later
+    reservoir.totalWeights = current_pixel_reservoir_data.z;
+    reservoir.Fx = current_pixel_reservoir_data.w;
 
-    // This will contain this frames, this pixels reservoir and last frames reservoir
-    Reservoir reservoir_data[2]; // Will contain the current pixels reservoir, and the previous frame's reservoir data for this current pixel
-
-    for(int i = 0; i < 2; i++)
-    {
-        reservoir_data[i].W_y = 0.0f;
-        reservoir_data[i].index = -1;
-        reservoir_data[i].totalWeights = 0.0f;
-    }
-
-    ivec2 current_pixel = ivec2(gl_LaunchIDEXT.xy);
-    reservoir_data[0].W_y = current_pixel_reservoir_data.y; // Current pixel weight
-    reservoir_data[0].index = int(current_pixel_reservoir_data.x); // Current pixel index
-
-    // Need to compute the current pixel position in the previous frame (unproject?)
+    // Get the motion vector for the current pixel
     vec2 motion_vector = texelFetch(MotionVectors, ivec2(gl_LaunchIDEXT.xy), 0).xy;
 
     // Get the previous frame pixel position by subtracting the motion vector from the current pixel position
-    ivec2 previous_pixel = ivec2(current_pixel - motion_vector * ubo.viewportSize); // motion_vector is difference between UV, we need it in pixels to multiply by viewportsize
+    ivec2 current_pixel = ivec2(gl_LaunchIDEXT.xy);
+    ivec2 previous_pixel = ivec2(current_pixel - motion_vector * ubo.viewportSize); // motion_vector is difference between UV, we need it in pixels so multiply by viewportsize
 
-    ivec2 current_pixel_in_previous_frame = ivec2(gl_LaunchIDEXT.xy);
-    reservoir_data[1].W_y   = max(0.0, texelFetch(PreviousFrame, previous_pixel, 0).y);
-    reservoir_data[1].index = int(texelFetch(PreviousFrame, previous_pixel, 0).x);
+    Reservoir previous_frame_reservoir;
+    previous_frame_reservoir.W_y   = texelFetch(PreviousFrame, previous_pixel, 0).y;
+    previous_frame_reservoir.index = int(texelFetch(PreviousFrame, previous_pixel, 0).x);
+    previous_frame_reservoir.totalWeights = texelFetch(PreviousFrame, previous_pixel, 0).z;
+    previous_frame_reservoir.Fx = texelFetch(PreviousFrame, previous_pixel, 0).w;
 
-
-    const int M = 2;
     // MIS is computed as m_i(x) = p_i(x) / sum_{j=1}^M p_j(x) where p_i(x) is the PDF (BRDF etc.) of the i-th candidate and M is the number of candidates (5 in this case, 1 for current pixel and 4 for neighbours).
     // For each of the reservoir neighbours, we compute the MIS weight
+    int M = 8; // 8 candidates are used during the initial candidates phase
     const float uniform_PDF_weight = 1.0 / float(NUM_LIGHTS);
-    const float sumCandidatePDFs = M * uniform_PDF_weight; // Since M candidates all were selected using uniform distribution. The sum of the PDFs of the candidates is M * 1 / NUM_LIGHTS = M / NUM_LIGHTS
-    const float rcpM = 1.0 / float(M); // 1 / M, where M is the number of candidates (5 in this case)
-    for(int i = 0; i < 2; i++)
-    {
-        // Index into the light array to get the light data
-        Light L = lightData.lights[reservoir_data[i].index];
+    float sumCandidatePDFs = M * uniform_PDF_weight; // Since M candidates all were selected using uniform distribution. The sum of the PDFs of the candidates is M * 1 / NUM_LIGHTS = M / NUM_LIGHTS
+    float rcpM = 1.0 / float(M); // 1 / M, where M is the number of candidates (8 in this case)
 
-        float dist = length(L.LightPosition.xyz - pos);
-        const vec3 LightDir = normalize(L.LightPosition.xyz - pos);
-        const float LightIntensity = 1000.0f * (1.0 / (dist * dist));
+    // Index into the light array to get the light data
+    Light L = lightData.lights[previous_frame_reservoir.index];
 
-        // Compute the MIS weight
-        const float current_sample_PDF = uniform_PDF_weight; // Reciprocal of the PDF of the uniform distribution
-        float m_i = current_sample_PDF / sumCandidatePDFs; // m_i = 1 / pdf_i * (1 / M * sum(w_i)) where pdf_i is the PDF of the uniform distribution and M is the number of candidates
+    float dist = length(L.LightPosition.xyz - pos);
+    const vec3 LightDir = normalize(L.LightPosition.xyz - pos);
+    const float LightIntensity = 1000.0f * (1.0 / (dist * dist));
 
-        // Evaluate F(x) at the current pixel using neighbouring reservoir data
-        float F_x = max(dot(n, LightDir), 0.001) * LightIntensity; // Simplied F(x) only doing diffuse
+    // Compute the MIS weight
+    const float current_sample_PDF = uniform_PDF_weight; // Reciprocal of the PDF of the uniform distribution
+    float m_i = current_sample_PDF / sumCandidatePDFs; // m_i = 1 / pdf_i * (1 / M * sum(w_i)) where pdf_i is the PDF of the uniform distribution and M is the number of candidates
 
-        // Compute the weight for this sample with MIS included
-        float w_i = F_x * m_i * reservoir_data[i].W_y; // w_i = F(x) * m_i * W_y where W_y is the weight of the neighbouring reservoir
+    // Evaluate F(x) at the current pixel using neighbouring reservoir data
+    float F_x = previous_frame_reservoir.Fx; // Simplied F(x) only doing diffuse
 
-        // Update the reservoir using current sample data
-        update(seed, reservoir, w_i, F_x, reservoir_data[i].index);
-    }
+    // Compute the weight for this sample with MIS included
+    float w_i = F_x * m_i * previous_frame_reservoir.totalWeights * previous_frame_reservoir.W_y; // w_i = F(x) * m_i * W_y where W_y is the weight of the neighbouring reservoir
+
+    // Update the reservoir using current sample data
+    update(seed, reservoir, w_i, F_x, previous_frame_reservoir.index);
+
 
     return reservoir;
 }
 
 
-vec3 Temporal(vec3 n, vec3 pos, vec3 albedo)
+vec4 Temporal(vec3 n, vec3 pos, vec3 albedo)
 {
     uint seed = uint(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x) + gl_LaunchIDEXT.x;
     seed *= rtx.frameIndex;
     vec3 throughput = vec3(1.0);
     uint pixelIndex = gl_LaunchIDEXT.y * 1280 + gl_LaunchIDEXT.x;
-    vec3 pixelReservoir = texelFetch(InitialCandidates, ivec2(gl_LaunchIDEXT.xy), 0).rgb;
-
-    // Current pixels reservoir
-    // Reservoir reservoir;
-    // reservoir.W_y = W_y;
-    // reservoir.index = index;
+    vec4 pixelReservoir = texelFetch(InitialCandidates, ivec2(gl_LaunchIDEXT.xy), 0).rgba; // (x = index, y = W_y, z = totalWeights, w = M)
 
     Reservoir reservoir = ComputeTemporal(pixelReservoir, seed, n, pos);
-
-    // Fetch the neighbouring reservoirs, compute MIS and update the reservoir
-    // MISWeighting(reservoir, seed, n, pos);
 
     // The reservoir should now contain the new updated sample
     // Use the index from the reservoir to fetch the light data
     Light L = lightData.lights[reservoir.index];
-
 
     // Compute lighting using this light source
     vec3 LightDir = normalize(L.LightPosition.xyz - pos);
@@ -431,20 +411,14 @@ vec3 Temporal(vec3 n, vec3 pos, vec3 albedo)
 
     // This is debug to ensure its valid, remove eventually
     if (isinf(target_function) || isnan(target_function))
-        return vec3(0.0, 0.0, 1.0);
+        return vec4(0.0, 0.0, 1.0, 0.0);
 
     // Evaluate the unbiased constribuion weight W_x
     // We moved rcpM = 1 / float(M) into MISWeighting function
     float W_x = target_function * reservoir.totalWeights;
     reservoir.W_y = W_x;
 
-    float Visibility = CastShadowRay(pos, n, LightDir, dist - 0.001);
-    vec3 directLighting = computeDirectLighting(pos, n, albedo, LightDir, intensity, L.LightColour.rgb);
-    vec3 radiance = throughput * directLighting * reservoir.W_y * Visibility;
-
-    // vec2 mv = texelFetch(MotionVectors, ivec2(gl_LaunchIDEXT.xy), 0).xy;
-
-    return radiance;
+    return vec4(reservoir.index, reservoir.W_y, reservoir.totalWeights, reservoir.Fx);
 }
 
 
@@ -486,11 +460,13 @@ void main()
     //vec3 indirectLight = computeIndirectLightingBEFORENEW(worldPos, worldNormal, albedo, sunIntensity);
     // vec3 DirectLight = RISReservoirSampling(worldPos, worldNormal, albedo);
     //vec3 DirectLight = NaiveDirectLighting(worldPos, worldNormal, albedo);
-    if(rtx.bounces == 1)
-    {
-        rayPayLoad.colour = vec3(Verify(worldNormal, worldPos, albedo));
-    } else {
-        vec3 radiance = vec3(0.3, 0.5, 0.9);
-        rayPayLoad.colour = vec3(Temporal(worldNormal, worldPos, albedo));
-    }
+//    if(rtx.bounces == 1)
+//    {
+//        rayPayLoad.colour = vec3(Verify(worldNormal, worldPos, albedo));
+//    } else {
+//        vec3 radiance = vec3(0.3, 0.5, 0.9);
+//        rayPayLoad.colour = vec3(Temporal(worldNormal, worldPos, albedo));
+//    }
+
+    rayPayLoad.colour = vec4(Temporal(worldNormal, worldPos, albedo));
 }

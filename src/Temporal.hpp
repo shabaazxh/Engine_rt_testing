@@ -19,10 +19,9 @@ namespace vk
 		void Update();
 		void Resize();
 
-		void CopyImageToImage();
+		void CopyImageToImage(const Image& currentSpatialTemporalReservoirImage);
 
 		Image& GetRenderTarget() { return m_RenderTarget; }
-		CameraTransform m_PreviousCameraTransform; // Will need a uniform buffer which updates and passes  the data to closest hit shader per-frame
 	private:
 		void CreatePipeline();
 		void CreateShaderBindingTable();

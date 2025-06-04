@@ -20,7 +20,7 @@ struct RayPayLoad
 {
     vec3 pos;
     vec3 dir;
-    vec3 colour;
+    vec4 colour;
     vec3 hitnormal;
     vec3 hitpos;
     float hit;
@@ -53,13 +53,13 @@ void main()
 
     rayPayLoad.pos = origin.xyz;
     rayPayLoad.dir = direction.xyz;
-    rayPayLoad.colour = vec3(0.0);
+    rayPayLoad.colour = vec4(0.0);
     rayPayLoad.hitnormal = vec3(0.0);
     rayPayLoad.hit = -1.0f;
 
     // Seed for random sampling (based on pixel ID)
     uint seed = uint(gl_LaunchIDEXT.x + gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x);
-    vec3 totalRadiance = vec3(0.0);
+    vec4 totalRadiance = vec4(0.0);
 
     for (int i = 0; i < NUM_SAMPLES; i++) {
 
@@ -71,9 +71,9 @@ void main()
 
         traceRayEXT(topLevelAS, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0, rayPayLoad.pos, tmin, rayPayLoad.dir, tmax, 0);
 
-        totalRadiance += rayPayLoad.colour;
+        totalRadiance += rayPayLoad.colour.rgba;
     }
 
     rayPayLoad.colour = totalRadiance / float(NUM_SAMPLES);
-    imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(rayPayLoad.colour, 0.0));
+    imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(rayPayLoad.colour));
 }

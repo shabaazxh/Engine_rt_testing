@@ -68,7 +68,7 @@ vk::Temporal::Temporal(Context& context, std::shared_ptr<Scene>& scene, std::sha
 			VK_FORMAT_R32G32B32A32_SFLOAT,
 			VK_IMAGE_LAYOUT_UNDEFINED,
 			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0,
-			VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+			VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR
 		);
 
 
@@ -87,22 +87,24 @@ vk::Temporal::Temporal(Context& context, std::shared_ptr<Scene>& scene, std::sha
 	CreatePipeline();
 }
 
-void vk::Temporal::CopyImageToImage()
+void vk::Temporal::CopyImageToImage(const Image& currentSpatialTemporalReservoirImage)
 {
 	// Useful link: https://gpuopen.com/learn/vulkan-barriers-explained/
 	ExecuteSingleTimeCommands(context, [&](VkCommandBuffer cmd)
 		{
 			// Transition the output to a TRANSFER_SRC_OPTIMAL layout since we will use this as the source
 			// to copy data to the DST image
+			// Write the reservoirs for each pixel to a seperate output image in the spatial reuse pass
+			// Ensure its final layout is SHADER_READ_ONLY so this can transition it
 			ImageTransition(
 				cmd,
-				m_RenderTarget.image,
+				currentSpatialTemporalReservoirImage.image,
 				VK_FORMAT_R32G32B32A32_SFLOAT,
 				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 				VK_ACCESS_SHADER_READ_BIT,
 				VK_ACCESS_TRANSFER_READ_BIT,
-				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, // Before this copy op, this image is sampled in a fragment shader
+				VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, // Before this copy op, this image is sampled in a ray tracing shader
 				VK_PIPELINE_STAGE_TRANSFER_BIT
 			);
 
@@ -130,7 +132,7 @@ void vk::Temporal::CopyImageToImage()
 
 			vkCmdCopyImage(
 				cmd,
-				m_RenderTarget.image,
+				currentSpatialTemporalReservoirImage.image,
 				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 				m_PreviousImage.image,
 				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -144,7 +146,7 @@ void vk::Temporal::CopyImageToImage()
 
 			ImageTransition(
 				cmd,
-				m_RenderTarget.image,
+				currentSpatialTemporalReservoirImage.image,
 				VK_FORMAT_R32G32B32A32_SFLOAT,
 				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -295,7 +297,7 @@ void vk::Temporal::Execute(VkCommandBuffer cmd)
 		VK_FORMAT_R32G32B32A32_SFLOAT,
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
 		VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR
+		VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR
 	);
 
 
@@ -327,7 +329,7 @@ void vk::Temporal::Execute(VkCommandBuffer cmd)
 		VK_IMAGE_LAYOUT_GENERAL,
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-		VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+		VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR
 	);
 
 #ifdef _DEBUG

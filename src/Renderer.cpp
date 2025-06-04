@@ -118,14 +118,17 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	m_HistoryPass		= std::make_unique<History>(context, m_RayPass->GetRenderTarget());
 
 	// Spatial pass will take in the temporal resampled reservoir results and spatially reuse to resample
-	m_SpatialPass		= std::make_unique<Spatial>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates());
+	m_SpatialPass		= std::make_unique<Spatial>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates(), m_TemporalPass->GetRenderTarget());
 
 	// A final shading pass should go here? Which takes in the Spatial reuse reservoirs and computes lighting. This could perhaps
 	// Happen in the spatial pass? Since we can spatially reuse for the current pixel and then use that updated reservoir for shading output from spatial pass
 	m_CompositePass		= std::make_unique<Composite>(context, m_RayPass->GetRenderTarget(), m_HistoryPass->GetRenderTarget());
 
 	// Currently passing the spatial pass result to the composite to display, switch to RayPass to show initial candidates
-	m_PresentPass		= std::make_unique<PresentPass>(context, m_CompositePass->GetRenderTarget(), m_TemporalPass->GetRenderTarget());
+	m_PresentPass		= std::make_unique<PresentPass>(context, m_CompositePass->GetRenderTarget(), m_SpatialPass->GetRenderTarget());
+
+
+	// @NOTE: The final reservoirs from spatial reuse are the ones which should be copied to temporal pass "previous frame"
 
 	ImGuiRenderer::Initialize(context);
 }
@@ -306,7 +309,7 @@ void vk::Renderer::Render(double deltaTime)
 		m_MotionVectorsPass->Execute(cmd);
 		m_TemporalPass->Execute(cmd);
 		m_HistoryPass->Execute(cmd);
-		// m_SpatialPass->Execute(cmd);
+		m_SpatialPass->Execute(cmd);
 
 		m_CompositePass->Execute(cmd);
 		m_PresentPass->Execute(cmd, index);
@@ -318,7 +321,7 @@ void vk::Renderer::Render(double deltaTime)
 	Submit();
 	Present(index);
 
-	m_TemporalPass->CopyImageToImage();
+	m_TemporalPass->CopyImageToImage(m_SpatialPass->GetSpatialReuseReservoirs());
 	m_MotionVectorsPass->Update();
 
 	vk::currentFrame = (vk::currentFrame + 1) % vk::MAX_FRAMES_IN_FLIGHT;

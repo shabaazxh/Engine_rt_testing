@@ -12,7 +12,7 @@ namespace vk
 	class Spatial
 	{
 	public:
-		explicit Spatial(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initialCandidates);
+		explicit Spatial(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initialCandidates, Image& TemporalReuseReservoirs);
 		~Spatial();
 
 		void Execute(VkCommandBuffer cmd);
@@ -20,7 +20,7 @@ namespace vk
 		void Resize();
 
 		Image& GetRenderTarget() { return m_RenderTarget; }
-
+		Image& GetSpatialReuseReservoirs() { return m_SpatialReuseReservoirs; }
 	private:
 		void CreatePipeline();
 		void CreateShaderBindingTable();
@@ -30,7 +30,9 @@ namespace vk
 		std::shared_ptr<Scene> scene;
 		std::shared_ptr<Camera> camera;
 		Image m_RenderTarget;
+		Image m_SpatialReuseReservoirs;
 		Image& initialCandidates;
+		Image& TemporalReuseReservoirs;
 
 		VkPipeline m_Pipeline;
 		VkPipelineLayout m_PipelineLayout;

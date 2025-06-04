@@ -545,7 +545,7 @@ vec3 computeIndirectLightingOLD(vec3 pos, vec3 n, vec3 albedo, float sunIntensit
 }
 
 
-#define CANDIDATE_MAX 10
+#define CANDIDATE_MAX 8
 
 struct Candidate
 {
@@ -662,12 +662,14 @@ struct Reservoir
     float W_y;
     float totalWeights;
     int index;
+    int M;
 };
 
 void update(inout uint seed, inout Reservoir reservoir, in Candidate xi, in float xi_weight, int index)
 {
     reservoir.totalWeights = reservoir.totalWeights + xi_weight;
     float r = GetRandomNumber(seed);
+    reservoir.M = reservoir.M + 1;
     if(r < (xi_weight / reservoir.totalWeights))
     {
         reservoir.Y = xi;
@@ -694,7 +696,7 @@ void RISReservoir(inout Reservoir reservoir, inout uint seed, vec3 pos, vec3 n, 
         candidates[i].intensity = 1000.0f * att;
 
         // Compute RIS weight for this candidate light
-        float F_x = max(dot(n, candidates[i].lightDir), 0.001) * candidates[i].intensity; // Simplied F(x) for weighting. Not sure if need to compute entir BRDF * cosine * ....?
+        float F_x = max(dot(n, candidates[i].lightDir), 0.0) * candidates[i].intensity; // Simplied F(x) for weighting. Not sure if need to compute entir BRDF * cosine * ....?
         candidates[i].Fx = F_x; // The target function F(x) that PDF(X) approximates better with more candidates. Using lambert cosine term but this can be other importance sampling methods
         candidates[i].weight = rcpM * F_x * rcpUniformDistributionWeight; // Move 1.0 / M to here when computing weight as suggested
 
@@ -760,7 +762,7 @@ vec3 RISReservoirSampling(vec3 pos, vec3 n, vec3 albedo)
         // if the next pass was temporal reuse, then we would take the previous temporal + spatial output and mix it with current intial candidates
         // once this is done, we pass it to another pass which will then spatially reuse and from there pass it to the next RT pass for it to be used
         // and select reservoir for current pixel
-        imageStore(ReservoirsImage, ivec2(gl_LaunchIDEXT.xy), vec4(reservoir.index, reservoir.W_y, 0.0, 0.0));
+        imageStore(ReservoirsImage, ivec2(gl_LaunchIDEXT.xy), vec4(reservoir.index, reservoir.W_y, reservoir.totalWeights, LightSource.Fx));
 
         // Compute direct lighting using the elected light source
         float Visibility = CastShadowRay(pos, n, LightSource.lightDir, length(LightSource.light.LightPosition.xyz - pos) - 0.001);
