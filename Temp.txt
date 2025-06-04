@@ -1,1 +1,2 @@
-﻿
+﻿Could output UV or world space positions from the initial candidates pass 
+and then use this to compute motion vectors for the temporal pass 

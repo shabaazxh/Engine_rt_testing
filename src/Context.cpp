@@ -673,6 +673,11 @@ bool vk::Context::MakeContext(uint32_t width, uint32_t height)
     }
 #endif
 
+    if (enableDebugUtil)
+    {
+		std::printf("================ [DEBUG UTILS ENABLED] ================\n");
+    }
+
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     window = glfwCreateWindow(width, height, "Vulkan", nullptr, nullptr);

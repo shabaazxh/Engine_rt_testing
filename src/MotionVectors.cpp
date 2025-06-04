@@ -1,13 +1,14 @@
+#include "Camera.hpp"
 #include "MotionVectors.hpp"
 #include "Pipeline.hpp"
 #include "RenderPass.hpp"
 
-vk::MotionVectors::MotionVectors(Context& context, Camera& camera, const Image& currentDepthBuffer)
-	: context{context}, camera{camera}, currentDepthBuffer{currentDepthBuffer}
+vk::MotionVectors::MotionVectors(Context& context, std::shared_ptr<Camera> camera, Image& WorldHitPositions)
+	: context{context}, camera{camera}, WorldHitPositions{ WorldHitPositions }
 {
 	m_width = context.extent.width;
 	m_height = context.extent.height;
-	m_previousCameraTransform = {};
+	m_PreviousCameraTransform = {};
 
 	m_RenderTarget = CreateImageTexture2D(
 		"MotionVectors_RT",
@@ -15,16 +16,18 @@ vk::MotionVectors::MotionVectors(Context& context, Camera& camera, const Image& 
 		m_width,
 		m_height,
 		VK_FORMAT_R16G16B16A16_SFLOAT,
-		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 		VK_IMAGE_ASPECT_COLOR_BIT,
 		1
 	);
 
+	m_previousCameraUB.resize(MAX_FRAMES_IN_FLIGHT);
 	for (auto& buffer : m_previousCameraUB)
 	{
 		buffer = CreateBuffer("PreviousCameraUB", context, sizeof(CameraTransform), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 	}
 
+	CreateDescriptors();
 	CreateRenderPass();
 	CreateFramebuffer();
 	CreatePipeline();
@@ -32,6 +35,10 @@ vk::MotionVectors::MotionVectors(Context& context, Camera& camera, const Image& 
 
 vk::MotionVectors::~MotionVectors()
 {
+	for (auto& buffer : m_previousCameraUB)
+	{
+		buffer.Destroy(context.device);
+	}
 	m_RenderTarget.Destroy(context.device);
 	vkDestroyPipeline(context.device, m_Pipeline, nullptr);
 	vkDestroyPipelineLayout(context.device, m_PipelineLayout, nullptr);
@@ -40,10 +47,12 @@ vk::MotionVectors::~MotionVectors()
 	vkDestroyRenderPass(context.device, m_RenderPass, nullptr);
 }
 
+// @TODO: Make sure to call this right at the end of all passes and not in the Renderers update function
+// To ensure it updates to the previous frames camera transform and doesn't update with the current camera transform.
 void vk::MotionVectors::Update()
 {
-	m_previousCameraTransform = camera.GetCameraTransform();
-	m_previousCameraUB[currentFrame].WriteToBuffer(m_previousCameraTransform, sizeof(CameraTransform));
+	m_PreviousCameraTransform = camera->GetCameraTransform();
+	m_previousCameraUB[currentFrame].WriteToBuffer(m_PreviousCameraTransform, sizeof(CameraTransform));
 }
 
 void vk::MotionVectors::Resize()
@@ -128,7 +137,7 @@ void vk::MotionVectors::CreateRenderPass()
 		.AddDependency(VK_SUBPASS_EXTERNAL, 0, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT, VK_DEPENDENCY_BY_REGION_BIT)
 
 		// Ensure this pass finishes writing to the motion vectors target before the next pass uses it to sample from in its fragment shader
-		.AddDependency(0, VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT, VK_DEPENDENCY_BY_REGION_BIT)
+		.AddDependency(0, VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT, VK_DEPENDENCY_BY_REGION_BIT)
 		.Build();
 
 	context.SetObjectName(context.device, (uint64_t)m_RenderPass, VK_OBJECT_TYPE_RENDER_PASS, "MotionVectorsRenderPass");
@@ -160,6 +169,10 @@ void vk::MotionVectors::CreateDescriptors()
 		CreateDescriptorBinding(2, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT)
 	};
 
+	m_DescriptorSetLayout = CreateDescriptorSetLayout(context, bindings);
+
+	AllocateDescriptorSets(context, context.descriptorPool, m_DescriptorSetLayout, MAX_FRAMES_IN_FLIGHT, m_DescriptorSets);
+
 	// Bind current frame depth buffer
 	// Current frame camera uniform
 	// Previous frame camera uniform
@@ -168,15 +181,17 @@ void vk::MotionVectors::CreateDescriptors()
 	{
 		VkDescriptorImageInfo imgInfo = {
 			.sampler = clampToEdgeSamplerAniso,
-			.imageView = currentDepthBuffer.imageView,
+			.imageView = WorldHitPositions.imageView,
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		};
+
+		UpdateDescriptorSet(context, 0, imgInfo, m_DescriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 	}
 
 	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
 	{
 		VkDescriptorBufferInfo bufferInfo{};
-		bufferInfo.buffer = camera.GetBuffers()[i].buffer;
+		bufferInfo.buffer = camera->GetBuffers()[i].buffer;
 		bufferInfo.offset = 0;
 		bufferInfo.range = sizeof(CameraTransform);
 		UpdateDescriptorSet(context, 1, bufferInfo, m_DescriptorSets[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
@@ -186,7 +201,7 @@ void vk::MotionVectors::CreateDescriptors()
 	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
 	{
 		VkDescriptorBufferInfo bufferInfo{};
-		bufferInfo.buffer = camera.GetBuffers()[i].buffer;
+		bufferInfo.buffer = m_previousCameraUB[i].buffer;
 		bufferInfo.offset = 0;
 		bufferInfo.range = sizeof(CameraTransform);
 		UpdateDescriptorSet(context, 2, bufferInfo, m_DescriptorSets[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);

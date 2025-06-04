@@ -100,24 +100,32 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	std::cout << "Number of Lights: " << m_scene->GetLights().size() << std::endl;
 
 	// Renderer passes
-	m_ShadowMap	    = std::make_unique<ShadowMap>(context, m_scene);
-	m_DepthPrepass  = std::make_unique<DepthPrepass>(context, m_scene, m_camera);
-	m_ForwardPass   = std::make_unique<ForwardPass>(context, m_ShadowMap->GetRenderTarget(), m_DepthPrepass->GetRenderTarget(), m_scene, m_camera);
+	// m_ShadowMap	    = std::make_unique<ShadowMap>(context, m_scene);
+	// m_DepthPrepass      = std::make_unique<DepthPrepass>(context, m_scene, m_camera);
+	// m_ForwardPass   = std::make_unique<ForwardPass>(context, m_ShadowMap->GetRenderTarget(), m_DepthPrepass->GetRenderTarget(), m_scene, m_camera);
 
 	// Create the initial candidates using RIS
-	m_RayPass		= std::make_unique<RayPass>(context, m_scene, m_camera);
+	m_RayPass		    = std::make_unique<RayPass>(context, m_scene, m_camera);
+
+	m_MotionVectorsPass = std::make_unique<MotionVectors>(context, m_camera, m_RayPass->GetWorldHitPositions());
+
+	// For now, we should store the output from the temporal pass as "previous frame" and this should hopefully work
+	// Once that works, we can extend it and make previous frame be the output from the spatial pass
+	// We will begin with the temporal pass for testing to ensure temporal works
+	m_TemporalPass		= std::make_unique<Temporal>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates(), m_MotionVectorsPass->GetRenderTarget());
 
 	// History pass goes first to temporally reuse past frame reservoirs
-	m_HistoryPass = std::make_unique<History>(context, m_RayPass->GetRenderTarget());
+	m_HistoryPass		= std::make_unique<History>(context, m_RayPass->GetRenderTarget());
+
 	// Spatial pass will take in the temporal resampled reservoir results and spatially reuse to resample
-	m_SpatialPass	= std::make_unique<Spatial>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates());
+	m_SpatialPass		= std::make_unique<Spatial>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates());
 
 	// A final shading pass should go here? Which takes in the Spatial reuse reservoirs and computes lighting. This could perhaps
 	// Happen in the spatial pass? Since we can spatially reuse for the current pixel and then use that updated reservoir for shading output from spatial pass
-	m_CompositePass = std::make_unique<Composite>(context, m_RayPass->GetRenderTarget(), m_HistoryPass->GetRenderTarget());
+	m_CompositePass		= std::make_unique<Composite>(context, m_RayPass->GetRenderTarget(), m_HistoryPass->GetRenderTarget());
 
 	// Currently passing the spatial pass result to the composite to display, switch to RayPass to show initial candidates
-	m_PresentPass   = std::make_unique<PresentPass>(context, m_CompositePass->GetRenderTarget(), m_SpatialPass->GetRenderTarget());
+	m_PresentPass		= std::make_unique<PresentPass>(context, m_CompositePass->GetRenderTarget(), m_TemporalPass->GetRenderTarget());
 
 	ImGuiRenderer::Initialize(context);
 }
@@ -128,6 +136,8 @@ void vk::Renderer::Destroy()
 
 	ImGuiRenderer::Shutdown(context);
 	m_DepthPrepass.reset();
+	m_MotionVectorsPass.reset();
+	m_TemporalPass.reset();
 	m_ForwardPass.reset();
 	m_ShadowMap.reset();
 	m_CompositePass.reset();
@@ -291,28 +301,28 @@ void vk::Renderer::Render(double deltaTime)
 		VK_CHECK(vkBeginCommandBuffer(cmd, &beginInfo), "Failed to begin command buffer");
 
 
-		if (vk::renderType == RenderType::RAYPASS)
-		{
-			m_RayPass->Execute(cmd);
-			m_HistoryPass->Execute(cmd);
-			m_SpatialPass->Execute(cmd);
-		}
-		else
-		{
-			m_ShadowMap->Execute(cmd);
-			m_DepthPrepass->Execute(cmd);
-			m_ForwardPass->Execute(cmd);
-		}
+		// m_DepthPrepass->Execute(cmd);
+		m_RayPass->Execute(cmd);
+		m_MotionVectorsPass->Execute(cmd);
+		m_TemporalPass->Execute(cmd);
+		m_HistoryPass->Execute(cmd);
+		// m_SpatialPass->Execute(cmd);
 
 		m_CompositePass->Execute(cmd);
 		m_PresentPass->Execute(cmd, index);
+
+
 		vkEndCommandBuffer(cmd);
 	}
 
 	Submit();
 	Present(index);
 
+	m_TemporalPass->CopyImageToImage();
+	m_MotionVectorsPass->Update();
+
 	vk::currentFrame = (vk::currentFrame + 1) % vk::MAX_FRAMES_IN_FLIGHT;
+
 }
 
 void vk::Renderer::Submit()
@@ -377,6 +387,7 @@ void vk::Renderer::Update(double deltaTime)
 
 	ImGuiRenderer::Update(m_scene, m_camera);
 	m_RayPass->Update();
+	m_TemporalPass->Update();
 	m_SpatialPass->Update();
 	m_HistoryPass->Update();
 	// Update passes

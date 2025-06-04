@@ -1,7 +1,7 @@
 #include "Context.hpp"
 #include "Camera.hpp"
 #include "Scene.hpp"
-#include "Spatial.hpp"
+#include "Temporal.hpp"
 #include "Pipeline.hpp"
 #include "Utils.hpp"
 #include "Buffer.hpp"
@@ -15,11 +15,12 @@ namespace
 	}
 }
 
-vk::Spatial::Spatial(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initialCandidates) :
+vk::Temporal::Temporal(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initialCandidates, Image& MotionVectors) :
 	context{ context },
 	scene{ scene },
 	camera{ camera },
-	initialCandidates{initialCandidates},
+	initialCandidates{ initialCandidates },
+	MotionVectors{ MotionVectors },
 	m_Pipeline{ VK_NULL_HANDLE },
 	m_PipelineLayout{ VK_NULL_HANDLE },
 	m_descriptorSetLayout{ VK_NULL_HANDLE },
@@ -32,10 +33,181 @@ vk::Spatial::Spatial(Context& context, std::shared_ptr<Scene>& scene, std::share
 
 	m_rtxSettingsUBO.resize(MAX_FRAMES_IN_FLIGHT);
 	for (auto& buffer : m_rtxSettingsUBO)
-		buffer = CreateBuffer("SpatialUBO", context, sizeof(RTX), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+		buffer = CreateBuffer("TemporalUBO", context, sizeof(RTX), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
 	m_RenderTarget = CreateImageTexture2D(
-		"SpatialRT",
+		"TemporalRT",
+		context,
+		m_width,
+		m_height,
+		VK_FORMAT_R32G32B32A32_SFLOAT,
+		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+		VK_IMAGE_ASPECT_COLOR_BIT,
+		1
+	);
+
+	// This starts off as shader read only since it'll be read from during the temporal pass first
+	// then at the end, we transition to transfer dst optimal and copy data into it which requires layout transition
+	m_PreviousImage = CreateImageTexture2D(
+		"PreviousImage",
+		context,
+		m_width,
+		m_height,
+		VK_FORMAT_R32G32B32A32_SFLOAT,
+		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+		VK_IMAGE_ASPECT_COLOR_BIT,
+		1
+	);
+
+
+	ExecuteSingleTimeCommands(context, [&](VkCommandBuffer cmd) {
+
+		ImageTransition(
+			cmd,
+			m_RenderTarget.image,
+			VK_FORMAT_R32G32B32A32_SFLOAT,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0,
+			VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+		);
+
+
+		ImageTransition(
+			cmd,
+			m_PreviousImage.image,
+			VK_FORMAT_R32G32B32A32_SFLOAT,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0,
+			VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR
+		);
+
+		});
+
+	BuildDescriptors();
+	CreatePipeline();
+}
+
+void vk::Temporal::CopyImageToImage()
+{
+	// Useful link: https://gpuopen.com/learn/vulkan-barriers-explained/
+	ExecuteSingleTimeCommands(context, [&](VkCommandBuffer cmd)
+		{
+			// Transition the output to a TRANSFER_SRC_OPTIMAL layout since we will use this as the source
+			// to copy data to the DST image
+			ImageTransition(
+				cmd,
+				m_RenderTarget.image,
+				VK_FORMAT_R32G32B32A32_SFLOAT,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_ACCESS_TRANSFER_READ_BIT,
+				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, // Before this copy op, this image is sampled in a fragment shader
+				VK_PIPELINE_STAGE_TRANSFER_BIT
+			);
+
+			// Transition to TRANSFER_DST_OPTIMAL layout since it will data copied to it from the other image
+			ImageTransition(
+				cmd,
+				m_PreviousImage.image,
+				VK_FORMAT_R32G32B32A32_SFLOAT,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, // Before this copy op, this image is sampled in a ray tracing shader
+				VK_PIPELINE_STAGE_TRANSFER_BIT
+			);
+
+			VkImageCopy imgCopy =
+			{
+				.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+				.srcOffset = {0,0, 0},
+				.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+				.dstOffset = {0, 0, 0},
+				.extent = {m_width, m_height, 1}
+			};
+
+			vkCmdCopyImage(
+				cmd,
+				m_RenderTarget.image,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				m_PreviousImage.image,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				1,
+				&imgCopy
+			);
+
+
+			// Transiton the resource back to make sure its in the correct layout for the rendering loop where it will
+			// transition these resources to ensure they're in the correct layout for the ray tracing shaders to write to it
+
+			ImageTransition(
+				cmd,
+				m_RenderTarget.image,
+				VK_FORMAT_R32G32B32A32_SFLOAT,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_ACCESS_TRANSFER_READ_BIT,
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_PIPELINE_STAGE_TRANSFER_BIT,
+				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+			);
+
+			// Transition this back to shader read only for the same reasons as the m_RenderTarget transition back after finishing copy
+			ImageTransition(
+				cmd,
+				m_PreviousImage.image,
+				VK_FORMAT_R32G32B32A32_SFLOAT,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_PIPELINE_STAGE_TRANSFER_BIT,
+				VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR
+			);
+		});
+}
+
+
+vk::Temporal::~Temporal()
+{
+	for (auto& buffer : m_rtxSettingsUBO) {
+		buffer.Destroy(context.device);
+	}
+
+	m_RenderTarget.Destroy(context.device);
+	m_PreviousImage.Destroy(context.device);
+	vkDestroyPipeline(context.device, m_Pipeline, nullptr);
+	vkDestroyPipelineLayout(context.device, m_PipelineLayout, nullptr);
+	vkDestroyDescriptorSetLayout(context.device, m_descriptorSetLayout, nullptr);
+
+	RayGenShaderBindingTable->Destroy(context.device);
+	MissShaderBindingTable->Destroy(context.device);
+	HitShaderBindingTable->Destroy(context.device);
+}
+
+void vk::Temporal::Resize()
+{
+	m_width = context.extent.width;
+	m_height = context.extent.height;
+
+	m_RenderTarget.Destroy(context.device);
+	m_PreviousImage.Destroy(context.device);
+
+	m_RenderTarget = CreateImageTexture2D(
+		"TemporalRT",
+		context,
+		context.extent.width,
+		context.extent.height,
+		VK_FORMAT_R32G32B32A32_SFLOAT,
+		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		VK_IMAGE_ASPECT_COLOR_BIT,
+		1
+	);
+
+	m_PreviousImage = CreateImageTexture2D(
+		"PreviousImage",
 		context,
 		m_width,
 		m_height,
@@ -54,58 +226,20 @@ vk::Spatial::Spatial(Context& context, std::shared_ptr<Scene>& scene, std::share
 			VK_FORMAT_R32G32B32A32_SFLOAT,
 			VK_IMAGE_LAYOUT_UNDEFINED,
 			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0,
-			VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+			VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR
 		);
-	});
 
-	BuildDescriptors();
-	CreatePipeline();
-}
-
-vk::Spatial::~Spatial()
-{
-	for (auto& buffer : m_rtxSettingsUBO) {
-		buffer.Destroy(context.device);
-	}
-
-	m_RenderTarget.Destroy(context.device);
-	vkDestroyPipeline(context.device, m_Pipeline, nullptr);
-	vkDestroyPipelineLayout(context.device, m_PipelineLayout, nullptr);
-	vkDestroyDescriptorSetLayout(context.device, m_descriptorSetLayout, nullptr);
-
-	RayGenShaderBindingTable->Destroy(context.device);
-	MissShaderBindingTable->Destroy(context.device);
-	HitShaderBindingTable->Destroy(context.device);
-}
-
-void vk::Spatial::Resize()
-{
-	m_width = context.extent.width;
-	m_height = context.extent.height;
-
-	m_RenderTarget.Destroy(context.device);
-
-	m_RenderTarget = CreateImageTexture2D(
-		"SpatialRT",
-		context,
-		context.extent.width,
-		context.extent.height,
-		VK_FORMAT_R32G32B32A32_SFLOAT,
-		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-		VK_IMAGE_ASPECT_COLOR_BIT,
-		1
-	);
-
-	ExecuteSingleTimeCommands(context, [&](VkCommandBuffer cmd) {
 
 		ImageTransition(
 			cmd,
-			m_RenderTarget.image,
+			m_PreviousImage.image,
 			VK_FORMAT_R32G32B32A32_SFLOAT,
 			VK_IMAGE_LAYOUT_UNDEFINED,
 			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0,
-			VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+			VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR
 		);
+
+
 	});
 
 	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
@@ -132,12 +266,11 @@ void vk::Spatial::Resize()
 	}
 }
 
-
-void vk::Spatial::Execute(VkCommandBuffer cmd)
+void vk::Temporal::Execute(VkCommandBuffer cmd)
 {
 
 #ifdef _DEBUG
-	RenderPassLabel(cmd, "Spatial");
+	RenderPassLabel(cmd, "Temporal");
 #endif // !DEBUG
 
 	VkPhysicalDeviceRayTracingPipelinePropertiesKHR rayTracingPipelineProperties{};
@@ -174,7 +307,7 @@ void vk::Spatial::Execute(VkCommandBuffer cmd)
 	VkStridedDeviceAddressRegionKHR miss_shader_sbt_entry{};
 	miss_shader_sbt_entry.deviceAddress = GetBufferDeviceAddress(context.device, MissShaderBindingTable->buffer);
 	miss_shader_sbt_entry.stride = handle_size_aligned;
-	miss_shader_sbt_entry.size = handle_size_aligned ;
+	miss_shader_sbt_entry.size = handle_size_aligned;
 
 	VkStridedDeviceAddressRegionKHR hit_shader_sbt_entry{};
 	hit_shader_sbt_entry.deviceAddress = GetBufferDeviceAddress(context.device, HitShaderBindingTable->buffer);
@@ -202,20 +335,20 @@ void vk::Spatial::Execute(VkCommandBuffer cmd)
 #endif // !DEBUG
 }
 
-void vk::Spatial::Update()
+void vk::Temporal::Update()
 {
 	rtxSettings.bounces = rtxSettings.bounces;
 	rtxSettings.frameIndex = (frameNumber);
 	m_rtxSettingsUBO[currentFrame].WriteToBuffer(&rtxSettings, sizeof(RTX));
 }
 
-void vk::Spatial::CreatePipeline()
+void vk::Temporal::CreatePipeline()
 {
 	// Create the pipeline
 	auto pipelineResult = vk::PipelineBuilder(context, PipelineType::RAYTRACING, VertexBinding::NONE, 0)
 		.AddShader("assets/shaders/raygen.rgen.spv", ShaderType::RAYGEN)
 		.AddShader("assets/shaders/shadowmiss.rmiss.spv", ShaderType::MISS)
-		.AddShader("assets/shaders/Spatial.rchit.spv", ShaderType::HIT)
+		.AddShader("assets/shaders/Temporal.rchit.spv", ShaderType::HIT)
 		.CreateShaderGroup(VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR, 0) // raygen
 		.CreateShaderGroup(VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR, 1) // miss
 		.CreateShaderGroup(VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR, VK_SHADER_UNUSED_KHR, 2) // regular hit
@@ -228,7 +361,7 @@ void vk::Spatial::CreatePipeline()
 	CreateShaderBindingTable();
 }
 
-void vk::Spatial::CreateShaderBindingTable()
+void vk::Temporal::CreateShaderBindingTable()
 {
 	// Now create the shader binding table
 	VkPhysicalDeviceRayTracingPipelinePropertiesKHR rayTracingPipelineProperties{};
@@ -285,7 +418,7 @@ void vk::Spatial::CreateShaderBindingTable()
 	HitShaderBindingTable->WriteToBuffer(shaderHandleStorage.data() + handle_size_aligned * 2, handle_size_aligned);
 }
 
-void vk::Spatial::BuildDescriptors()
+void vk::Temporal::BuildDescriptors()
 {
 	m_descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
 	{
@@ -301,7 +434,9 @@ void vk::Spatial::BuildDescriptors()
 			CreateDescriptorBinding(7, 300, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
 			CreateDescriptorBinding(8, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
 			CreateDescriptorBinding(9, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
-			CreateDescriptorBinding(10, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR)
+			CreateDescriptorBinding(10, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
+			CreateDescriptorBinding(11, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
+			CreateDescriptorBinding(12, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR)
 		};
 
 		m_descriptorSetLayout = CreateDescriptorSetLayout(context, bindings);
@@ -409,5 +544,29 @@ void vk::Spatial::BuildDescriptors()
 		};
 
 		UpdateDescriptorSet(context, 10, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	}
+
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		VkDescriptorImageInfo imageInfo = {
+
+			.sampler = clampToEdgeSamplerAniso,
+			.imageView = m_PreviousImage.imageView,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+
+		UpdateDescriptorSet(context, 11, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	}
+
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		VkDescriptorImageInfo imageInfo = {
+
+			.sampler = clampToEdgeSamplerAniso,
+			.imageView = MotionVectors.imageView,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+
+		UpdateDescriptorSet(context, 12, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 	}
 }

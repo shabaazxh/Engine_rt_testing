@@ -9,19 +9,17 @@ namespace vk
 	class Context;
 	class Camera;
 	class Scene;
-	class RayPass
+	class Temporal
 	{
 	public:
-		explicit RayPass(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera);
-		~RayPass();
+		explicit Temporal(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initialCandidates);
+		~Temporal();
 
 		void Execute(VkCommandBuffer cmd);
 		void Update();
 		void Resize();
 
 		Image& GetRenderTarget() { return m_RenderTarget; }
-		Image& GetInitialCandidates() { return m_InitialCandidates; }
-		Image& GetWorldHitPositions() { return m_WorldPositionsTarget; }
 
 	private:
 		void CreatePipeline();
@@ -32,8 +30,7 @@ namespace vk
 		std::shared_ptr<Scene> scene;
 		std::shared_ptr<Camera> camera;
 		Image m_RenderTarget;
-		Image m_WorldPositionsTarget;
-		Image m_InitialCandidates;
+		Image& initialCandidates;
 
 		VkPipeline m_Pipeline;
 		VkPipelineLayout m_PipelineLayout;
@@ -46,8 +43,6 @@ namespace vk
 		std::unique_ptr<Buffer> RayGenShaderBindingTable;
 		std::unique_ptr<Buffer> MissShaderBindingTable;
 		std::unique_ptr<Buffer> HitShaderBindingTable;
-
 		std::vector<Buffer> m_rtxSettingsUBO;
-		Buffer m_Reservoirs;
 	};
 }

@@ -116,6 +116,11 @@ void vk::History::Execute(VkCommandBuffer cmd)
 
 void vk::History::Destroy()
 {
+	for (auto& buffer : m_rtxSettingsUBO)
+	{
+		buffer.Destroy(context.device);
+	}
+
 	m_RenderTarget.Destroy(context.device);
 	vkDestroyPipeline(context.device, m_pipeline, nullptr);
 	vkDestroyPipelineLayout(context.device, m_pipelineLayout, nullptr);

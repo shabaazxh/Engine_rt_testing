@@ -75,6 +75,9 @@
     <ClInclude Include="..\src\Spatial.hpp">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\Temporal.hpp">
+      <Filter>src</Filter>
+    </ClInclude>
     <ClInclude Include="..\src\Utils.hpp">
       <Filter>src</Filter>
     </ClInclude>
@@ -159,6 +162,9 @@
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="..\src\Spatial.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Temporal.cpp">
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="..\src\Utils.cpp">

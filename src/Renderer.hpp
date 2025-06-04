@@ -12,8 +12,10 @@
 #include "ShadowMap.hpp"
 #include "Composite.hpp"
 #include "RayPass.hpp"
+#include "Temporal.hpp"
 #include "History.hpp"
 #include "Spatial.hpp"
+#include "MotionVectors.hpp"
 
 namespace vk
 {
@@ -60,6 +62,8 @@ namespace vk
 		std::unique_ptr<Composite>        m_CompositePass;
 		std::unique_ptr<PresentPass>	  m_PresentPass;
 		std::unique_ptr<RayPass>          m_RayPass;
+		std::unique_ptr<MotionVectors>    m_MotionVectorsPass;
+		std::unique_ptr<Temporal>         m_TemporalPass;
 		std::unique_ptr<Spatial>          m_SpatialPass;
 		std::unique_ptr<History>          m_HistoryPass;
 		std::shared_ptr<Camera> m_camera;

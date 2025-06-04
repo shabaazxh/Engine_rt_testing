@@ -7,9 +7,6 @@
 #include "RenderPass.hpp"
 #include "ImGuiRenderer.hpp"
 
-/*
-	This pass will just take the forward pass shading image and present it
-*/
 
 vk::PresentPass::PresentPass(Context& context, Image& renderedScene, const Image& nonTemporalRenderedScene) :
 	context{ context },

@@ -215,8 +215,8 @@ void vk::Scene::CreateBLAS()
 			&accelerationStructureBuildSizesInfo
 		);
 
-		printf("Acceleration structure size: %zu\n", size_t(accelerationStructureBuildSizesInfo.accelerationStructureSize));
-		printf("Build Scratch size: %zu\n", size_t(accelerationStructureBuildSizesInfo.buildScratchSize));
+		//printf("Acceleration structure size: %zu\n", size_t(accelerationStructureBuildSizesInfo.accelerationStructureSize));
+		//printf("Build Scratch size: %zu\n", size_t(accelerationStructureBuildSizesInfo.buildScratchSize));
 
 		BottomLevelAccelerationStructures[i].buffer = std::make_unique<Buffer>(
 			CreateBuffer(

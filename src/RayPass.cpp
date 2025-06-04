@@ -105,9 +105,9 @@ vk::RayPass::RayPass(Context& context, std::shared_ptr<Scene>& scene, std::share
 
 vk::RayPass::~RayPass()
 {
-
-	for (auto& buffer : m_rtxSettingsUBO)
+	for (auto& buffer : m_rtxSettingsUBO) {
 		buffer.Destroy(context.device);
+	}
 
 	m_Reservoirs.Destroy(context.device);
 	m_RenderTarget.Destroy(context.device);

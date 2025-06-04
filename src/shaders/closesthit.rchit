@@ -545,7 +545,7 @@ vec3 computeIndirectLightingOLD(vec3 pos, vec3 n, vec3 albedo, float sunIntensit
 }
 
 
-#define CANDIDATE_MAX 8
+#define CANDIDATE_MAX 10
 
 struct Candidate
 {

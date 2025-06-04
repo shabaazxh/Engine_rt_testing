@@ -2,21 +2,26 @@
 
 #include <volk/volk.h>
 #include "Image.hpp"
-#include "Camera.hpp"
+#include <vector>
+
 
 namespace vk
 {
 	class Context;
+	class Camera;
+	class Buffer;
 	struct CameraTransform;
 
 	class MotionVectors
 	{
 	public:
-		MotionVectors(Context& context, Camera& camera, const Image& currentDepthBuffer);
+		MotionVectors(Context& context, std::shared_ptr<Camera> camera, Image& WorldHitPositions);
 		~MotionVectors();
 		void Update();
 		void Resize();
 		void Execute(VkCommandBuffer cmd);
+
+		Image& GetRenderTarget() { return m_RenderTarget; }
 
 	private:
 		void CreatePipeline();
@@ -25,12 +30,12 @@ namespace vk
 		void CreateDescriptors();
 	private:
 		Context& context;
-		Camera& camera;
-		const Image& currentDepthBuffer;
+		std::shared_ptr<Camera> camera;
+		Image& WorldHitPositions;
+
 		uint32_t m_width;
 		uint32_t m_height;
 		Image m_RenderTarget;
-		CameraTransform m_previousCameraTransform;
 
 		VkPipeline m_Pipeline;
 		VkPipelineLayout m_PipelineLayout;
@@ -39,6 +44,7 @@ namespace vk
 		VkDescriptorSetLayout m_DescriptorSetLayout;
 		std::vector<VkDescriptorSet> m_DescriptorSets;
 		std::vector<Buffer> m_previousCameraUB;
+
 		CameraTransform m_PreviousCameraTransform;
 	};
 };

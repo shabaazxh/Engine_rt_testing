@@ -19,7 +19,7 @@ vk::Image::Image(Image&& other) noexcept :
 
 	//std::cout << "Move Constructing Image\n";
 }
-	
+
 
 vk::Image& vk::Image::operator=(vk::Image&& other) noexcept
 {
@@ -39,7 +39,7 @@ void vk::Image::Destroy(VkDevice device)
 		assert(allocator != VK_NULL_HANDLE);
 		assert(allocation != VK_NULL_HANDLE);
 		vkDestroyImageView(device, imageView, nullptr);
-		vmaDestroyImage(allocator, image, allocation);		
+		vmaDestroyImage(allocator, image, allocation);
 	}
 }
 
@@ -104,8 +104,8 @@ vk::Image vk::LoadTextureFromDisk(const std::string& path, Context& context, VkF
 
 	ExecuteSingleTimeCommands(context, [&](VkCommandBuffer cmd)
 		{
-			// Transition from LAYOUT_UNDEFINED to LAYOUT_TRANSFER_DST_OPTIMAL to copy contents 
-			// from buffer to the image 
+			// Transition from LAYOUT_UNDEFINED to LAYOUT_TRANSFER_DST_OPTIMAL to copy contents
+			// from buffer to the image
 			ImageBarrier(
 				cmd,
 				img.image,
@@ -128,8 +128,8 @@ vk::Image vk::LoadTextureFromDisk(const std::string& path, Context& context, VkF
 
 			vkCmdCopyBufferToImage(cmd, stagingBuffer.buffer, img.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferCopy);
 
-			// Transition from DST_OPTIMAL Layout to SRC_OPTIMAL since it'll 
-			// be used as a SOURCE of a transfer operation during mip generation 
+			// Transition from DST_OPTIMAL Layout to SRC_OPTIMAL since it'll
+			// be used as a SOURCE of a transfer operation during mip generation
 			ImageBarrier(
 				cmd,
 				img.image,
