@@ -229,7 +229,7 @@ void RISReservoir(inout Reservoir reservoir, inout uint seed, vec3 pos, vec3 n, 
         // Get the properties of this light
         float dist = length(light.LightPosition.xyz - pos);
         vec3 light_dir = normalize(light.LightPosition.xyz - pos);
-        float LightIntensity = 1000.0f * (1.0 / (dist * dist));
+        float LightIntensity = 100.0f * (1.0 / (dist * dist));
 
         // Compute RIS weight for this candidate light
         float F_x = max(dot(n, light_dir), 0.001) * LightIntensity; // Simplied F(x) for weighting. Not sure if need to compute entir BRDF * cosine * ....?  // The target function F(x) that PDF(X) approximates better with more candidates. Using lambert cosine term but this can be other importance sampling methods
@@ -278,7 +278,7 @@ vec3 RISReservoirSampling(vec3 pos, vec3 n, vec3 albedo)
         Light LightSource = lightData.lights[light_index];
         float dist = length(LightSource.LightPosition.xyz - pos);
         vec3 light_dir = normalize(LightSource.LightPosition.xyz - pos);
-        float LightIntensity = 1000.0f * (1.0 / (dist * dist));
+        float LightIntensity = 100.0f * (1.0 / (dist * dist));
 
         // Compute the light weight to prevent bias
         // W_x = (sum(w_i) / M) / pdf(x)
@@ -324,7 +324,7 @@ vec3 NaiveDirectLighting(vec3 pos, vec3 n, vec3 albedo)
         float dist = length(light.LightPosition.xyz - pos);
         float att = 1.0 / (dist * dist);
         LightColour = light.LightColour.xyz;
-        intensity = 1000.0f * att;
+        intensity = 100.0f * att;
 
         float visibility = CastShadowRay(pos, n, lightDir, length(light.LightPosition.xyz - pos) - 0.001);
         vec3 directLighting = computeDirectLighting(pos, n, albedo, lightDir, intensity, LightColour.rgb) * visibility;

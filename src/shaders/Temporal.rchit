@@ -235,7 +235,7 @@ Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed,
 
         float dist = length(L.LightPosition.xyz - pos);
         const vec3 LightDir = normalize(L.LightPosition.xyz - pos);
-        const float LightIntensity = 1000.0f * (1.0 / (dist * dist));
+        const float LightIntensity = 100.0f * (1.0 / (dist * dist));
 
         // Evaluate F(x) at the current pixel
         float F_x = max(dot(n, LightDir), 0.001) * LightIntensity; // Simplied F(x) only doing diffuse
@@ -269,7 +269,7 @@ vec4 Temporal(vec3 n, vec3 pos, vec3 albedo)
     vec3 LightDir = normalize(L.LightPosition.xyz - pos);
     float dist = length(L.LightPosition.xyz - pos);
     float att = 1.0 / (dist * dist);
-    float intensity = 1000.0f * att;
+    float intensity = 100.0f * att;
     float F_x = max(dot(n, LightDir), 0.001) * intensity; // F(x) = max(dot(n, L), 0.001) * intensity, where n is the normal and L is the light direction
     float target_function = 1.0 / F_x; // Reciprocal of the target function F(x) that PDF(X) approximates better with more candidates.
 

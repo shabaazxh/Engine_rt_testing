@@ -200,10 +200,9 @@ struct Candidate
 struct Reservoir
 {
     Candidate Y;
+    int index;
     float W_y;
     float totalWeights;
-    float Fx;
-    int index;
     int M;
 };
 
@@ -236,7 +235,7 @@ void RISReservoir(inout Reservoir reservoir, uint seed, vec3 pos, vec3 n, inout 
         float dist = length(candidates[i].light.LightPosition.xyz - pos);
         float att = 1.0 / (dist * dist);
         candidates[i].lightDir = normalize(candidates[i].light.LightPosition.xyz - pos);
-        candidates[i].intensity = 1000.0f * att;
+        candidates[i].intensity = 100.0f * att;
 
         // Compute RIS weight for this candidate light
         float F_x = max(dot(n, candidates[i].lightDir), 0.001) * candidates[i].intensity; // Simplied F(x) for weighting. Not sure if need to compute entir BRDF * cosine * ....?
@@ -313,7 +312,7 @@ vec3 Verify(vec3 n, vec3 pos, vec3 albedo)
     vec3 LightDir = normalize(L.LightPosition.xyz - pos);
     float dist = length(L.LightPosition.xyz - pos);
     float att = 1.0 / (dist * dist);
-    float intensity = 1000.0f * att;
+    float intensity = 100.0f * att;
 
     float Visibility = CastShadowRay(pos, n, LightDir, dist - 0.001);
     vec3 directLighting = computeDirectLighting(pos, n, albedo, LightDir, intensity, L.LightColour.rgb);
@@ -345,14 +344,14 @@ vec2 DiskPoint(float sampleRadius, float x, float y)
 }
 
 
-void update(uint seed, inout Reservoir reservoir, in float xi_weight, in float f_x, int index)
+void update(uint seed, inout Reservoir reservoir, in float xi_weight, int index, int previousM, int currentPixelReservoirM)
 {
     reservoir.totalWeights = reservoir.totalWeights + xi_weight;
     float r = GetRandomNumber(seed);
+    reservoir.M += min(previousM, 20 * currentPixelReservoirM);
     if(r < (xi_weight / reservoir.totalWeights))
     {
         reservoir.index = index;
-        reservoir.Fx = f_x;
     }
 }
 
@@ -362,64 +361,128 @@ void update(uint seed, inout Reservoir reservoir, in float xi_weight, in float f
 // A different PDF compared to the others thus, MIS is needed to compute a balance heuristic.
 
 // All these initial candidates used a uniform distribution i.e 1 / NUM_LIGHTS
-Reservoir MISWeighting(vec3 current_pixel_reservoir_data, inout uint seed, vec3 n, vec3 pos)
-{
-    const int M = 5; // We have 5 samples including our current pixel one
-    // Build a new reservoir to update by resampling neighbouring pixels
-    Reservoir reservoir;
-    reservoir.W_y = 0.0f;
-    reservoir.index = -1; // No index selected yet, will be updated later
-    reservoir.totalWeights = 0.0f;
+//Reservoir MISWeighting(vec3 current_pixel_reservoir_data, inout uint seed, vec3 n, vec3 pos)
+//{
+//    const int M = 5; // We have 5 samples including our current pixel one
+//    // Build a new reservoir to update by resampling neighbouring pixels
+//    Reservoir reservoir;
+//    reservoir.W_y = 0.0f;
+//    reservoir.index = -1; // No index selected yet, will be updated later
+//    reservoir.totalWeights = 0.0f;
+//
+//    Reservoir neighbouring_reservoirs[M]; // We will find 4 neighbours and fill this array
+//
+//    // We know this is is the current pixel
+//    // We can move +1, -1 in X, -X, Y, -Y to get the 4 neighbouring pixel coordinates and sample
+//    ivec2 current_pixel = ivec2(gl_LaunchIDEXT.xy);
+//    // Current pixel
+//    neighbouring_reservoirs[0].W_y = current_pixel_reservoir_data.y; // Current pixel weight
+//    neighbouring_reservoirs[0].index = int(current_pixel_reservoir_data.x); // Current pixel index
+//
+//    // The image ends up with nan values hence black
+//    for(uint i = 1; i < M; i++)
+//    {
+//        vec2 rand = Hammersley(i, M - 1);
+//        vec2 random = GetRandomHashValue01(seed);
+//        vec2 offset = DiskPoint(rtx.numPastFrames, random.x, random.y); // rtx.numPastFrame is controlling the radius of the disk
+//
+//        neighbouring_reservoirs[i].W_y = texelFetch(InitialCandidatesImage, current_pixel + ivec2(round(offset)), 0).y;
+//        neighbouring_reservoirs[i].index = int(texelFetch(InitialCandidatesImage, current_pixel + ivec2(round(offset)), 0).x);
+//    }
+//
+//    // We have sampled the neighbouring pixels, we now perform MIS to weight them
+//    // For each of the neighbouring pixels, we compute an MIS weight see how much is contributes at this pixel
+//    // And update the reservoir accordingly so that more "important" neighbours are selected more often
+//    // MIS is computed as m_i(x) = p_i(x) / sum_{j=1}^M p_j(x) where p_i(x) is the PDF (BRDF etc.) of the i-th candidate and M is the number of candidates (5 in this case, 1 for current pixel and 4 for neighbours).
+//    // For each of the reservoir neighbours, we compute the MIS weight
+//    const float uniform_PDF_weight = 1.0 / float(NUM_LIGHTS);
+//    const float sumCandidatePDFs = M * uniform_PDF_weight; // Since M candidates all were selected using uniform distribution. The sum of the PDFs of the candidates is M * 1 / NUM_LIGHTS = M / NUM_LIGHTS
+//    const float rcpM = 1.0 / float(M); // 1 / M, where M is the number of candidates (5 in this case)
+//    for(int i = 0; i < M; i++)
+//    {
+//        // Index into the light array to get the light data
+//        Light L = lightData.lights[neighbouring_reservoirs[i].index];
+//
+//        float dist = length(L.LightPosition.xyz - pos);
+//        const vec3 LightDir = normalize(L.LightPosition.xyz - pos);
+//        const float LightIntensity = 1000.0f * (1.0 / (dist * dist));
+//
+//        // Compute the MIS weight
+//        const float current_sample_PDF = uniform_PDF_weight; // Reciprocal of the PDF of the uniform distribution
+//        float m_i = current_sample_PDF / sumCandidatePDFs; // m_i = 1 / pdf_i * (1 / M * sum(w_i)) where pdf_i is the PDF of the uniform distribution and M is the number of candidates
+//
+//        // Evaluate F(x) at the current pixel using neighbouring reservoir data
+//        float F_x = max(dot(n, LightDir), 0.001) * LightIntensity; // Simplied F(x) only doing diffuse
+//
+//        // Compute the weight for this sample with MIS included
+//        float w_i = F_x * m_i * neighbouring_reservoirs[i].W_y; // w_i = F(x) * m_i * W_y where W_y is the weight of the neighbouring reservoir
+//
+//        // Update the reservoir using current sample data
+//        update(seed, reservoir, w_i, F_x, neighbouring_reservoirs[i].index);
+//    }
+//
+//    return reservoir;
+//}
 
-    Reservoir neighbouring_reservoirs[M]; // We will find 4 neighbours and fill this array
+
+Reservoir combine_reservoirs_spatial_reuse(vec4 current_pixel_reservoir_data, inout uint seed, vec3 n, vec3 pos)
+{
+    const int NUM_SPATIAL_NEIGHBOURS = 5; // 5 spatial neighbouring including the current pixel
+    Reservoir reservoir;;
+    reservoir.index = -1;
+    reservoir.W_y = 0.0;
+    reservoir.M = 0;
+    reservoir.totalWeights = 0.0;
+
+    Reservoir neighbouring_reservoirs[NUM_SPATIAL_NEIGHBOURS]; // We will find 4 neighbours and fill this array
+
+    // Init all reservoirs
+    for(int i = 0; i < NUM_SPATIAL_NEIGHBOURS; i++)
+    {
+        neighbouring_reservoirs[i].index = -1;
+        neighbouring_reservoirs[i].W_y = 0.0f;
+        neighbouring_reservoirs[i].M = 0;
+        neighbouring_reservoirs[i].totalWeights = 0.0f;
+    }
 
     // We know this is is the current pixel
     // We can move +1, -1 in X, -X, Y, -Y to get the 4 neighbouring pixel coordinates and sample
     ivec2 current_pixel = ivec2(gl_LaunchIDEXT.xy);
     // Current pixel
-    neighbouring_reservoirs[0].W_y = current_pixel_reservoir_data.y; // Current pixel weight
     neighbouring_reservoirs[0].index = int(current_pixel_reservoir_data.x); // Current pixel index
+    neighbouring_reservoirs[0].W_y = current_pixel_reservoir_data.y; // Current pixel weight
+    neighbouring_reservoirs[0].M = int(current_pixel_reservoir_data.z); // Current pixel M
 
     // The image ends up with nan values hence black
-    for(uint i = 1; i < M; i++)
+    const float uniform_PDF_weight = 1.0 / float(NUM_LIGHTS);
+    for(uint i = 1; i < NUM_SPATIAL_NEIGHBOURS; i++)
     {
-        vec2 rand = Hammersley(i, M - 1);
+        vec2 rand = Hammersley(i, NUM_SPATIAL_NEIGHBOURS - 1);
         vec2 random = GetRandomHashValue01(seed);
-        vec2 offset = DiskPoint(rtx.numPastFrames, random.x, random.y); // rtx.numPastFrame is controlling the radius of the disk
+        vec2 offset = DiskPoint(rtx.numPastFrames, random.x, random.y); // rtx.numPastFrame is controlling the radius of the disk, paper recommends 30 pixel radius
 
-        neighbouring_reservoirs[i].W_y = texelFetch(InitialCandidatesImage, current_pixel + ivec2(round(offset)), 0).y;
         neighbouring_reservoirs[i].index = int(texelFetch(InitialCandidatesImage, current_pixel + ivec2(round(offset)), 0).x);
+        neighbouring_reservoirs[i].W_y   = texelFetch(InitialCandidatesImage, current_pixel + ivec2(round(offset)), 0).y;
+        neighbouring_reservoirs[i].M     = int(texelFetch(InitialCandidatesImage, current_pixel + ivec2(round(offset)), 0).z);
     }
 
-    // We have sampled the neighbouring pixels, we now perform MIS to weight them
-    // For each of the neighbouring pixels, we compute an MIS weight see how much is contributes at this pixel
-    // And update the reservoir accordingly so that more "important" neighbours are selected more often
-    // MIS is computed as m_i(x) = p_i(x) / sum_{j=1}^M p_j(x) where p_i(x) is the PDF (BRDF etc.) of the i-th candidate and M is the number of candidates (5 in this case, 1 for current pixel and 4 for neighbours).
-    // For each of the reservoir neighbours, we compute the MIS weight
-    const float uniform_PDF_weight = 1.0 / float(NUM_LIGHTS);
-    const float sumCandidatePDFs = M * uniform_PDF_weight; // Since M candidates all were selected using uniform distribution. The sum of the PDFs of the candidates is M * 1 / NUM_LIGHTS = M / NUM_LIGHTS
-    const float rcpM = 1.0 / float(M); // 1 / M, where M is the number of candidates (5 in this case)
-    for(int i = 0; i < M; i++)
+    // Update the reservoir using the neighbouring reservoirs
+    for(uint i = 0; i < NUM_SPATIAL_NEIGHBOURS; i++)
     {
-        // Index into the light array to get the light data
         Light L = lightData.lights[neighbouring_reservoirs[i].index];
 
         float dist = length(L.LightPosition.xyz - pos);
         const vec3 LightDir = normalize(L.LightPosition.xyz - pos);
-        const float LightIntensity = 1000.0f * (1.0 / (dist * dist));
+        const float LightIntensity = 100.0f * (1.0 / (dist * dist));
 
-        // Compute the MIS weight
-        const float current_sample_PDF = uniform_PDF_weight; // Reciprocal of the PDF of the uniform distribution
-        float m_i = current_sample_PDF / sumCandidatePDFs; // m_i = 1 / pdf_i * (1 / M * sum(w_i)) where pdf_i is the PDF of the uniform distribution and M is the number of candidates
-
-        // Evaluate F(x) at the current pixel using neighbouring reservoir data
+        // Evaluate F(x) at the current pixel
         float F_x = max(dot(n, LightDir), 0.001) * LightIntensity; // Simplied F(x) only doing diffuse
 
-        // Compute the weight for this sample with MIS included
-        float w_i = F_x * m_i * neighbouring_reservoirs[i].W_y; // w_i = F(x) * m_i * W_y where W_y is the weight of the neighbouring reservoir
+        // Algorithm 4: Line: 4: p^q(r.y) * r.W * r.M
+        float w_i = F_x * neighbouring_reservoirs[i].W_y * neighbouring_reservoirs[i].M;
 
         // Update the reservoir using current sample data
-        update(seed, reservoir, w_i, F_x, neighbouring_reservoirs[i].index);
+        update(seed, reservoir, w_i, neighbouring_reservoirs[i].index, neighbouring_reservoirs[i].M, int(current_pixel_reservoir_data.z));
     }
 
     return reservoir;
@@ -433,13 +496,14 @@ vec4 Spatial(vec3 n, vec3 pos, vec3 albedo)
     vec3 throughput = vec3(1.0);
     vec4 pixelReservoir = texelFetch(TemporalReuseReservoirs, ivec2(gl_LaunchIDEXT.xy), 0).rgba;
 
-    // Temporarily turn off spatial reuse so we just output whatever the temporal pass did
     // Reservoir reservoir = MISWeighting(pixelReservoir, seed, n, pos);
 
-    Reservoir reservoir;
-    reservoir.index = int(pixelReservoir.x);
-    reservoir.W_y = pixelReservoir.y;
-    reservoir.M = int(pixelReservoir.z);
+//    Reservoir reservoir;
+//    reservoir.index = int(pixelReservoir.x);
+//    reservoir.W_y = pixelReservoir.y;
+//    reservoir.M = int(pixelReservoir.z);
+
+    Reservoir reservoir = combine_reservoirs_spatial_reuse(pixelReservoir, seed, n, pos);
 
     // The reservoir should now contain the new updated sample
     // Use the index from the reservoir to fetch the light data
@@ -449,9 +513,18 @@ vec4 Spatial(vec3 n, vec3 pos, vec3 albedo)
     vec3 LightDir = normalize(L.LightPosition.xyz - pos);
     float dist = length(L.LightPosition.xyz - pos);
     float att = 1.0 / (dist * dist);
-    float intensity = 1000.0f * att;
+    float intensity = 100.0f * att;
+    float Fx = max(dot(n, LightDir), 0.001) * intensity; // Simplied F(x) only doing diffuse
 
-    // Write the reservoir for the current pixel to the reservoir image. Not doing Spatial reuse yet so temporal pass will get these values back to do temporal again. We're doing this for now to ensure temporal pass results work before introducing spatial
+    float target_function = 1.0 / Fx;
+
+    if(isinf(target_function) || isnan(target_function))
+    {
+        return vec4(1.0, 0.0, 0.0, 1.0);
+    }
+
+    reservoir.W_y = target_function * (1.0 / reservoir.M) * reservoir.totalWeights;
+
     imageStore(SpatialReservoirStore, ivec2(gl_LaunchIDEXT.xy), vec4(reservoir.index, reservoir.W_y, reservoir.M, 0.0));
 
     float Visibility = CastShadowRay(pos, n, LightDir, dist - 0.001);
