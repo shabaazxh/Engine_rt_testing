@@ -431,20 +431,15 @@ vec4 Spatial(vec3 n, vec3 pos, vec3 albedo)
     uint seed = uint(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x) + gl_LaunchIDEXT.x;
     seed *= rtx.frameIndex;
     vec3 throughput = vec3(1.0);
-    uint pixelIndex = gl_LaunchIDEXT.y * 1280 + gl_LaunchIDEXT.x;
     vec4 pixelReservoir = texelFetch(TemporalReuseReservoirs, ivec2(gl_LaunchIDEXT.xy), 0).rgba;
 
     // Temporarily turn off spatial reuse so we just output whatever the temporal pass did
     // Reservoir reservoir = MISWeighting(pixelReservoir, seed, n, pos);
 
     Reservoir reservoir;
-    reservoir.W_y = pixelReservoir.y;
     reservoir.index = int(pixelReservoir.x);
-    reservoir.totalWeights = pixelReservoir.z;
-    reservoir.Fx = (pixelReservoir.w); // This is the F(x) value computed in the temporal pass we can use it directly here
-
-    // Fetch the neighbouring reservoirs, compute MIS and update the reservoir
-    // MISWeighting(reservoir, seed, n, pos);
+    reservoir.W_y = pixelReservoir.y;
+    reservoir.M = int(pixelReservoir.z);
 
     // The reservoir should now contain the new updated sample
     // Use the index from the reservoir to fetch the light data
@@ -455,25 +450,15 @@ vec4 Spatial(vec3 n, vec3 pos, vec3 albedo)
     float dist = length(L.LightPosition.xyz - pos);
     float att = 1.0 / (dist * dist);
     float intensity = 1000.0f * att;
-    // float target_function = 1.0 / reservoir.Fx; // Reciprocal of the target function F(x) that PDF(X) approximates better with more candidates.
 
-    // This is debug to ensure its valid, remove eventually
-    //  if (isinf(target_function) || isnan(target_function))
-         // return vec4(0.0, 0.0, 1.0, 1.0);
-
-    // Evaluate the unbiased constribuion weight W_x
-    // We moved rcpM = 1 / float(M) into MISWeighting function
-    // float W_x = target_function * reservoir.totalWeights;
-    // reservoir.W_y = W_x;
-
-    // Write the reservoir for the current pixel to the reservoir image
-    imageStore(SpatialReservoirStore, ivec2(gl_LaunchIDEXT.xy), vec4(reservoir.index, reservoir.W_y, reservoir.totalWeights, reservoir.Fx));
+    // Write the reservoir for the current pixel to the reservoir image. Not doing Spatial reuse yet so temporal pass will get these values back to do temporal again. We're doing this for now to ensure temporal pass results work before introducing spatial
+    imageStore(SpatialReservoirStore, ivec2(gl_LaunchIDEXT.xy), vec4(reservoir.index, reservoir.W_y, reservoir.M, 0.0));
 
     float Visibility = CastShadowRay(pos, n, LightDir, dist - 0.001);
     vec3 directLighting = computeDirectLighting(pos, n, albedo, LightDir, intensity, L.LightColour.rgb);
     vec3 radiance = throughput * directLighting * reservoir.W_y * Visibility;
 
-    return vec4(radiance, 1.0);
+    return vec4(radiance, 0.0);
 }
 
 
