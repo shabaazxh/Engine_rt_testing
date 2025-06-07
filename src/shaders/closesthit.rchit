@@ -370,6 +370,8 @@ void main()
 	vec3 objectNormal = normalize(cross(v1 - v0, v2 - v0));
 	vec3 worldNormal = normalize(vec3(objectNormal * gl_WorldToObjectEXT).xyz);
 
+    imageStore(NormalImage, ivec2(gl_LaunchIDEXT.xy), vec4(worldNormal, 0.0));
+
     // Compute direct lighting at the first hit
     vec3 sunDirection = normalize(vec3(0.0f, 1.0f, 0.5)); //.5 for z // vec3(0.0, 1.0, 0.35)
     float sunIntensity = 20.0;

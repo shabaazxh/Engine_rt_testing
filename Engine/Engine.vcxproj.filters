@@ -75,7 +75,13 @@
     <ClInclude Include="..\src\Spatial.hpp">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\SpatialCompute.hpp">
+      <Filter>src</Filter>
+    </ClInclude>
     <ClInclude Include="..\src\Temporal.hpp">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\TemporalCompute.hpp">
       <Filter>src</Filter>
     </ClInclude>
     <ClInclude Include="..\src\Utils.hpp">
@@ -104,9 +110,6 @@
     </ClInclude>
     <ClInclude Include="..\third_party\imgui\imstb_truetype.h">
       <Filter>third_party\imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="..\src\TemporalCompute.hpp">
-      <Filter>src</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -167,6 +170,12 @@
     <ClCompile Include="..\src\Spatial.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\SpatialCompute.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\TemporaLCompute.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
     <ClCompile Include="..\src\Temporal.cpp">
       <Filter>src</Filter>
     </ClCompile>
@@ -196,9 +205,6 @@
     </ClCompile>
     <ClCompile Include="..\third_party\imgui\imgui_widgets.cpp">
       <Filter>third_party\imgui</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\TemporaLCompute.cpp">
-      <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

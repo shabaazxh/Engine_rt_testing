@@ -461,9 +461,9 @@ Reservoir combine_reservoirs_spatial_reuse(vec4 current_pixel_reservoir_data, in
         vec2 random = GetRandomHashValue01(seed);
         vec2 offset = DiskPoint(rtx.numPastFrames, random.x, random.y); // rtx.numPastFrame is controlling the radius of the disk, paper recommends 30 pixel radius
 
-        neighbouring_reservoirs[i].index = int(texelFetch(InitialCandidatesImage, current_pixel + ivec2(round(offset)), 0).x);
-        neighbouring_reservoirs[i].W_y   = texelFetch(InitialCandidatesImage, current_pixel + ivec2(round(offset)), 0).y;
-        neighbouring_reservoirs[i].M     = int(texelFetch(InitialCandidatesImage, current_pixel + ivec2(round(offset)), 0).z);
+        neighbouring_reservoirs[i].index = int(texelFetch(TemporalReuseReservoirs, current_pixel + ivec2(round(offset)), 0).x);
+        neighbouring_reservoirs[i].W_y   = texelFetch(TemporalReuseReservoirs, current_pixel + ivec2(round(offset)), 0).y;
+        neighbouring_reservoirs[i].M     = int(texelFetch(TemporalReuseReservoirs, current_pixel + ivec2(round(offset)), 0).z);
     }
 
     // Update the reservoir using the neighbouring reservoirs

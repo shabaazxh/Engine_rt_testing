@@ -92,11 +92,18 @@ namespace vk
 		Reservoir reservoirs[1280 * 720];
 	};
 
+	struct ReusePass
+	{
+		int frameIndex;
+		glm::vec2 viewportSize;
+	};
+
 	inline PostProcessing postProcessSettings = {};
 	inline double deltaTime;
 	inline uint32_t setRenderingPipeline = 1;
 	inline uint32_t setAlphaMakingPipeline = 2;
 	inline RTX rtxSettings = { 1, 0, 2 };
+	inline ReusePass reuse_pass_uniform_data = {};
 	inline VkDescriptorSetLayout materialDescriptorSetLayout;
 	inline uint32_t frameNumber = 0;
 	inline bool isAccumulating = false;

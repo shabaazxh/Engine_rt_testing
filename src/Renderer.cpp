@@ -114,18 +114,23 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	// We will begin with the temporal pass for testing to ensure temporal works
 	m_TemporalPass		= std::make_unique<Temporal>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates(), m_MotionVectorsPass->GetRenderTarget());
 
+	// Image& initial_candidates, Image& hit_world_positions, Image& hit_normals, Image& motion_vectors)
+	m_TemporalComputePass = std::make_unique<TemporalCompute>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates(), m_RayPass->GetWorldHitPositions(), m_RayPass->GetHitNormals(), m_MotionVectorsPass->GetRenderTarget());
+
 	// History pass goes first to temporally reuse past frame reservoirs
 	m_HistoryPass		= std::make_unique<History>(context, m_RayPass->GetRenderTarget());
 
 	// Spatial pass will take in the temporal resampled reservoir results and spatially reuse to resample
 	m_SpatialPass		= std::make_unique<Spatial>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates(), m_TemporalPass->GetRenderTarget());
 
+	m_SpatialComputePass = std::make_unique<SpatialCompute>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates(), m_RayPass->GetWorldHitPositions(), m_RayPass->GetHitNormals(), m_TemporalComputePass->GetRenderTarget());
+
 	// A final shading pass should go here? Which takes in the Spatial reuse reservoirs and computes lighting. This could perhaps
 	// Happen in the spatial pass? Since we can spatially reuse for the current pixel and then use that updated reservoir for shading output from spatial pass
 	m_CompositePass		= std::make_unique<Composite>(context, m_RayPass->GetRenderTarget(), m_HistoryPass->GetRenderTarget());
 
 	// Currently passing the spatial pass result to the composite to display, switch to RayPass to show initial candidates
-	m_PresentPass		= std::make_unique<PresentPass>(context, m_CompositePass->GetRenderTarget(), m_SpatialPass->GetRenderTarget());
+	m_PresentPass		= std::make_unique<PresentPass>(context, m_RayPass->GetRenderTarget(), m_SpatialComputePass->GetShadingResult());
 
 
 	// @NOTE: The final reservoirs from spatial reuse are the ones which should be copied to temporal pass "previous frame"
@@ -141,6 +146,7 @@ void vk::Renderer::Destroy()
 	m_DepthPrepass.reset();
 	m_MotionVectorsPass.reset();
 	m_TemporalPass.reset();
+	m_TemporalComputePass.reset();
 	m_ForwardPass.reset();
 	m_ShadowMap.reset();
 	m_CompositePass.reset();
@@ -307,7 +313,10 @@ void vk::Renderer::Render(double deltaTime)
 		// m_DepthPrepass->Execute(cmd);
 		m_RayPass->Execute(cmd);
 		m_MotionVectorsPass->Execute(cmd);
-		m_TemporalPass->Execute(cmd);
+		// m_TemporalPass->Execute(cmd);
+		m_TemporalComputePass->Execute(cmd);
+		m_SpatialComputePass->Execute(cmd);
+
 		m_HistoryPass->Execute(cmd);
 		m_SpatialPass->Execute(cmd);
 
@@ -322,6 +331,8 @@ void vk::Renderer::Render(double deltaTime)
 	Present(index);
 
 	m_TemporalPass->CopyImageToImage(m_SpatialPass->GetSpatialReuseReservoirs());
+	m_TemporalComputePass->CopyImageToImage(m_TemporalComputePass->GetRenderTarget());
+
 	m_MotionVectorsPass->Update();
 
 	vk::currentFrame = (vk::currentFrame + 1) % vk::MAX_FRAMES_IN_FLIGHT;
@@ -391,6 +402,8 @@ void vk::Renderer::Update(double deltaTime)
 	ImGuiRenderer::Update(m_scene, m_camera);
 	m_RayPass->Update();
 	m_TemporalPass->Update();
+	m_TemporalComputePass->Update();
+	m_SpatialComputePass->Update();
 	m_SpatialPass->Update();
 	m_HistoryPass->Update();
 	// Update passes

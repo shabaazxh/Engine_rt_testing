@@ -16,6 +16,8 @@
 #include "History.hpp"
 #include "Spatial.hpp"
 #include "MotionVectors.hpp"
+#include "TemporalCompute.hpp"
+#include "SpatialCompute.hpp"
 
 namespace vk
 {
@@ -64,6 +66,8 @@ namespace vk
 		std::unique_ptr<RayPass>          m_RayPass;
 		std::unique_ptr<MotionVectors>    m_MotionVectorsPass;
 		std::unique_ptr<Temporal>         m_TemporalPass;
+		std::unique_ptr<TemporalCompute>  m_TemporalComputePass;
+		std::unique_ptr<SpatialCompute>   m_SpatialComputePass;
 		std::unique_ptr<Spatial>          m_SpatialPass;
 		std::unique_ptr<History>          m_HistoryPass;
 		std::shared_ptr<Camera> m_camera;

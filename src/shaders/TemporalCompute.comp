@@ -1,0 +1,203 @@
+#version 450
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+const int NUM_LIGHTS = 51;
+
+struct Light
+{
+	int Type;
+	vec4 LightPosition;
+	vec4 LightColour;
+	mat4 LightSpaceMatrix;
+};
+
+layout(set = 0, binding = 0) uniform Uniforms
+{
+    int frameIndex;
+    vec2 viewportSize;
+} ubo;
+
+
+layout(set = 0, binding = 1) uniform LightBuffer {
+	Light lights[NUM_LIGHTS];
+} lightData;
+
+layout(set = 0, binding = 2) uniform sampler2D initial_candidates_texture;
+layout(set = 0, binding = 3) uniform sampler2D hit_world_position_texture;
+layout(set = 0, binding = 4) uniform sampler2D hit_normals_texture;
+layout(set = 0, binding = 5) uniform sampler2D motion_vectors_texture;
+layout(set = 0, binding = 6) uniform sampler2D previous_frame_texture;
+
+layout(set = 0, binding = 7, rgba32f) uniform image2D reservoir_output_image;
+
+// Reference: https://github.com/NVIDIAGameWorks/RTXGI-DDGI/blob/main/samples/test-harness/shaders/include/Random.hlsl#L42
+uint WangHash(uint seed)
+{
+    seed = (seed ^ 61) ^ (seed >> 16);
+    seed *= 9;
+    seed = seed ^ (seed >> 4);
+    seed *= 0x27d4eb2d;
+    seed = seed ^ (seed >> 15);
+    return seed;
+}
+
+uint Xorshift(uint seed)
+{
+    // Xorshift algorithm from George Marsaglia's paper
+    seed ^= (seed << 13);
+    seed ^= (seed >> 17);
+    seed ^= (seed << 5);
+    return seed;
+}
+
+float GetRandomNumber(inout uint seed)
+{
+    seed = WangHash(seed);
+    return float(Xorshift(seed)) * (1.f / 4294967296.f);
+}
+
+vec2 GetRandomHashValue01(inout uint seed)
+{
+    float u = GetRandomNumber(seed);
+    float v = GetRandomNumber(seed);
+    return vec2(u, v);
+}
+
+
+vec2 GetRandomHashValue(inout uint seed)
+{
+    float u = GetRandomNumber(seed) * 2.0 - 1.0;
+    float v = GetRandomNumber(seed) * 2.0 - 1.0; // Seed is modified in-place
+    return vec2(u, v);
+}
+
+struct Reservoir
+{
+    int index;
+    float W_y;
+    float totalWeights;
+    int M;
+};
+
+void update(uint seed, inout Reservoir reservoir, in float xi_weight, int index, int previousM, int currentPixelReservoirM)
+{
+    reservoir.totalWeights = reservoir.totalWeights + xi_weight;
+    float r = GetRandomNumber(seed);
+    reservoir.M += min(previousM, 20 * currentPixelReservoirM); // Paper at the end suggests clamping M for temporal reuse
+    if(r < (xi_weight / reservoir.totalWeights))
+    {
+        reservoir.index = index;
+    }
+}
+
+// Need to take the current pixel, conver it to UV, then back project it to World , I have the world position from the hit position already
+// Then use the previous frames projection * view matrices to reproject it back to UV
+// Then sample the previous frame image to get the current pixels reservoir but in the previous frame
+// If we have motion vectors, computed we can compute the motion and subtract it from currentUV to get previousUV
+
+// @NOTE: Tip 3.4: Use 1 / M weights if and only if all inputs weights are identically distributed
+// If initial candidates have different PDFs, such as when reusing across pixels. When reusing
+// across pixels, if you're using different PDFs, the expectation is that nearby pixels might have used
+// A different PDF compared to the others thus, MIS is needed to compute a balance heuristic.
+
+// All these initial candidates used a uniform distribution i.e 1 / NUM_LIGHTS
+
+Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed, vec3 n, vec3 pos)
+{
+    // Init a reservoir with the current pixel reservoir data
+    Reservoir reservoir;;
+    reservoir.index = -1;
+    reservoir.W_y = 0.0;
+    reservoir.M = 0; // Number of candidates used during the initial candidates phase
+    reservoir.totalWeights = 0.0;
+
+    // This will hold the two reservoirs, one for the current pixel and one for the previous frame pixel
+    Reservoir reservoirs[2];
+    for(int i = 0; i < 2; i++) {
+        reservoirs[i].index = -1;
+        reservoirs[i].W_y = 0.0;
+        reservoirs[i].M = 0; // Number of candidates used during the initial candidates phase
+        reservoirs[i].totalWeights = 0.0;
+    }
+
+    // Get the motion vector for the current pixel
+    vec2 motion_vector = texelFetch(motion_vectors_texture, ivec2(gl_GlobalInvocationID.xy), 0).xy;
+
+    // Get the previous frame pixel position by subtracting the motion vector from the current pixel position
+    ivec2 current_pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 previous_pixel = ivec2(current_pixel - (motion_vector * ubo.viewportSize)); // motion_vector is difference between UV, we need it in pixels so multiply by viewportsize
+
+    reservoirs[0].index = int(current_pixel_reservoir_data.x);
+    reservoirs[0].W_y = current_pixel_reservoir_data.y;
+    reservoirs[0].M = int(current_pixel_reservoir_data.z);
+
+    reservoirs[1].index = int(texelFetch(previous_frame_texture, previous_pixel, 0).x);
+    reservoirs[1].W_y   = texelFetch(previous_frame_texture, previous_pixel, 0).y;
+    reservoirs[1].M = int(texelFetch(previous_frame_texture, previous_pixel, 0).z);
+
+    const float uniform_PDF_weight = 1.0 / float(NUM_LIGHTS);
+    // Index into the light array to get the light data
+
+    for(int i = 0; i < 2; i++) {
+        Light L = lightData.lights[reservoirs[i].index];
+
+        float dist = length(L.LightPosition.xyz - pos);
+        const vec3 LightDir = normalize(L.LightPosition.xyz - pos);
+        const float LightIntensity = 100.0f * (1.0 / (dist * dist));
+
+        // Evaluate F(x) at the current pixel
+        float F_x = max(dot(n, LightDir), 0.001) * LightIntensity; // Simplied F(x) only doing diffuse
+
+        // Algorithm 4: Line: 4: p^q(r.y) * r.W * r.M
+        float w_i = F_x * reservoirs[i].W_y * reservoirs[i].M;
+
+        // Update the reservoir using current sample data
+        update(seed, reservoir, w_i, reservoirs[i].index, reservoirs[i].M, int(current_pixel_reservoir_data.z));
+    }
+
+    return reservoir;
+}
+
+
+vec4 Temporal(vec3 n, vec3 pos)
+{
+    uvec2 dispatchSize = uvec2(ubo.viewportSize / 8);
+    uint launchWidth = dispatchSize.x * gl_WorkGroupSize.x;
+    uint seed = uint(gl_GlobalInvocationID.y * launchWidth) + gl_GlobalInvocationID.x;
+    seed *= ubo.frameIndex;
+
+    vec3 throughput = vec3(1.0);
+    vec4 pixelReservoir = texelFetch(initial_candidates_texture, ivec2(gl_GlobalInvocationID.xy), 0).rgba; // (x = index, y = W_y, z = totalWeights, w = M)
+
+    Reservoir reservoir = combine_reservoirs(pixelReservoir, seed, n, pos);
+
+    // The reservoir should now contain the new updated sample
+    // Use the index from the reservoir to fetch the light data
+    Light L = lightData.lights[reservoir.index];
+
+    // Compute lighting using this light source
+    vec3 LightDir = normalize(L.LightPosition.xyz - pos);
+    float dist = length(L.LightPosition.xyz - pos);
+    float att = 1.0 / (dist * dist);
+    float intensity = 100.0f * att;
+    float F_x = max(dot(n, LightDir), 0.001) * intensity; // F(x) = max(dot(n, L), 0.001) * intensity, where n is the normal and L is the light direction
+    float target_function = 1.0 / F_x; // Reciprocal of the target function F(x) that PDF(X) approximates better with more candidates.
+
+    // Algorithm 4: Line 6: Reservoir s: s.W = 1 / p^q(s.y) * ( 1 / s.M  * s.totalWeights )
+    reservoir.W_y = target_function * (1.0 / reservoir.M) * reservoir.totalWeights;
+
+    return vec4(reservoir.index, reservoir.W_y, reservoir.M, 0.0);
+}
+
+void main() {
+
+    ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+
+    // Get world and normal data
+    vec4 world_position = texelFetch(hit_world_position_texture, coords, 0);
+    vec4 world_normal   = texelFetch(hit_normals_texture, coords, 0);
+
+    vec4 reservoir_out = Temporal(world_normal.xyz, world_position.xyz);
+    imageStore(reservoir_output_image, coords, vec4(reservoir_out));
+
+}
