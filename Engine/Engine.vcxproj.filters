@@ -105,6 +105,9 @@
     <ClInclude Include="..\third_party\imgui\imstb_truetype.h">
       <Filter>third_party\imgui</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\TemporalCompute.hpp">
+      <Filter>src</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\Buffer.cpp">
@@ -193,6 +196,9 @@
     </ClCompile>
     <ClCompile Include="..\third_party\imgui\imgui_widgets.cpp">
       <Filter>third_party\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\TemporaLCompute.cpp">
+      <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

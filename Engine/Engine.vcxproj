@@ -117,6 +117,7 @@
     <ClInclude Include="..\src\ShadowMap.hpp" />
     <ClInclude Include="..\src\Spatial.hpp" />
     <ClInclude Include="..\src\Temporal.hpp" />
+    <ClInclude Include="..\src\TemporalCompute.hpp" />
     <ClInclude Include="..\src\Utils.hpp" />
     <ClInclude Include="..\third_party\imgui\imconfig.h" />
     <ClInclude Include="..\third_party\imgui\imgui.h" />
@@ -148,6 +149,7 @@
     <ClCompile Include="..\src\ShadowMap.cpp" />
     <ClCompile Include="..\src\Spatial.cpp" />
     <ClCompile Include="..\src\Temporal.cpp" />
+    <ClCompile Include="..\src\TemporaLCompute.cpp" />
     <ClCompile Include="..\src\Utils.cpp" />
     <ClCompile Include="..\src\main.cpp" />
     <ClCompile Include="..\third_party\imgui\imgui.cpp" />

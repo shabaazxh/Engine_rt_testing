@@ -14,7 +14,7 @@ struct Light
 layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
 layout(set = 0, binding = 10, rgba32f) uniform image2D WorldPositionImage;
 layout(set = 0, binding = 12, rgba32f) uniform image2D ReservoirsImage;
-layout(set = 0, binding = 13, rgba32f) uniform image2D MCandidatesImage;
+layout(set = 0, binding = 13, rgba32f) uniform image2D NormalImage;
 
 struct Res
 {

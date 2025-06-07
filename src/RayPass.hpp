@@ -33,8 +33,8 @@ namespace vk
 		std::shared_ptr<Camera> camera;
 		Image m_RenderTarget;
 		Image m_WorldPositionsTarget;
+		Image m_NormalsTarget;
 		Image m_InitialCandidates;
-		Image m_MCandidates;
 
 		VkPipeline m_Pipeline;
 		VkPipelineLayout m_PipelineLayout;

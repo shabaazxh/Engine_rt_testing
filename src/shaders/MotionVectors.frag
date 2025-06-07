@@ -44,5 +44,6 @@ void main()
 	vec2 curr_uv = uv;
 	vec2 motion_vector = curr_uv - prev_uv;
 
+	// @TODO: should store this in a RG texture not RGBA
 	fragColor = vec4(motion_vector, 0.0, 1.0);
 }

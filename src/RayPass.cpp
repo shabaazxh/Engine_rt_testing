@@ -58,8 +58,8 @@ vk::RayPass::RayPass(Context& context, std::shared_ptr<Scene>& scene, std::share
 		1
 	);
 
-	m_InitialCandidates = CreateImageTexture2D(
-		"InitialCandidates_RT",
+	m_NormalsTarget = CreateImageTexture2D(
+		"RayPassRT_WorldNormals",
 		context,
 		m_width,
 		m_height,
@@ -69,8 +69,8 @@ vk::RayPass::RayPass(Context& context, std::shared_ptr<Scene>& scene, std::share
 		1
 	);
 
-	m_MCandidates = CreateImageTexture2D(
-		"MCandidates_RT",
+	m_InitialCandidates = CreateImageTexture2D(
+		"InitialCandidates_RT",
 		context,
 		m_width,
 		m_height,
@@ -102,7 +102,7 @@ vk::RayPass::RayPass(Context& context, std::shared_ptr<Scene>& scene, std::share
 
 		ImageTransition(
 			cmd,
-			m_InitialCandidates.image,
+			m_NormalsTarget.image,
 			VK_FORMAT_R32G32B32A32_SFLOAT,
 			VK_IMAGE_LAYOUT_UNDEFINED,
 			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0,
@@ -111,12 +111,13 @@ vk::RayPass::RayPass(Context& context, std::shared_ptr<Scene>& scene, std::share
 
 		ImageTransition(
 			cmd,
-			m_MCandidates.image,
+			m_InitialCandidates.image,
 			VK_FORMAT_R32G32B32A32_SFLOAT,
 			VK_IMAGE_LAYOUT_UNDEFINED,
 			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0,
 			VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
 		);
+
 	});
 
 	BuildDescriptors();
@@ -132,8 +133,8 @@ vk::RayPass::~RayPass()
 	m_Reservoirs.Destroy(context.device);
 	m_RenderTarget.Destroy(context.device);
 	m_WorldPositionsTarget.Destroy(context.device);
+	m_NormalsTarget.Destroy(context.device);
 	m_InitialCandidates.Destroy(context.device);
-	m_MCandidates.Destroy(context.device);
 
 	vkDestroyPipeline(context.device, m_Pipeline, nullptr);
 	vkDestroyPipelineLayout(context.device, m_PipelineLayout, nullptr);
@@ -294,7 +295,7 @@ void vk::RayPass::Execute(VkCommandBuffer cmd)
 
 	ImageTransition(
 		cmd,
-		m_InitialCandidates.image,
+		m_NormalsTarget.image,
 		VK_FORMAT_R32G32B32A32_SFLOAT,
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
 		VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
@@ -303,13 +304,12 @@ void vk::RayPass::Execute(VkCommandBuffer cmd)
 
 	ImageTransition(
 		cmd,
-		m_MCandidates.image,
+		m_InitialCandidates.image,
 		VK_FORMAT_R32G32B32A32_SFLOAT,
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
 		VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
 		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR
 	);
-
 
 	VkStridedDeviceAddressRegionKHR raygen_shader_sbt_entry{};
 	raygen_shader_sbt_entry.deviceAddress = GetBufferDeviceAddress(context.device, RayGenShaderBindingTable->buffer);
@@ -361,17 +361,6 @@ void vk::RayPass::Execute(VkCommandBuffer cmd)
 		VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
 		VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
 	);
-
-	ImageTransition(
-		cmd,
-		m_MCandidates.image,
-		VK_FORMAT_R32G32B32A32_SFLOAT,
-		VK_IMAGE_LAYOUT_GENERAL,
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-		VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-	);
-
 
 #ifdef _DEBUG
 	EndRenderPassLabel(cmd);
@@ -622,7 +611,7 @@ void vk::RayPass::BuildDescriptors()
 	{
 		VkDescriptorImageInfo imageInfo = {
 			.sampler = VK_NULL_HANDLE,
-			.imageView = m_MCandidates.imageView,
+			.imageView = m_NormalsTarget.imageView,
 			.imageLayout = VK_IMAGE_LAYOUT_GENERAL
 		};
 
