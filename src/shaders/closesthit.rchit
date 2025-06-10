@@ -72,7 +72,7 @@ layout(set = 0, binding = 6, scalar) readonly buffer MaterialBuffer {
 
 layout(set = 0, binding = 7) uniform sampler2D textures[300];
 
-const int NUM_LIGHTS = 51;
+const int NUM_LIGHTS = 100;
 
 layout(set = 0, binding = 8) uniform LightBuffer {
 	Light lights[NUM_LIGHTS];
@@ -229,7 +229,7 @@ void RISReservoir(inout Reservoir reservoir, inout uint seed, vec3 pos, vec3 n, 
         // Get the properties of this light
         float dist = length(light.LightPosition.xyz - pos);
         vec3 light_dir = normalize(light.LightPosition.xyz - pos);
-        float LightIntensity = 100.0f * (1.0 / (dist * dist));
+        float LightIntensity = 2000.0f * (1.0 / (dist * dist));
 
         // Compute RIS weight for this candidate light
         float F_x = max(dot(n, light_dir), 0.001) * LightIntensity; // Simplied F(x) for weighting. Not sure if need to compute entir BRDF * cosine * ....?  // The target function F(x) that PDF(X) approximates better with more candidates. Using lambert cosine term but this can be other importance sampling methods
@@ -278,7 +278,7 @@ vec3 RISReservoirSampling(vec3 pos, vec3 n, vec3 albedo)
         Light LightSource = lightData.lights[light_index];
         float dist = length(LightSource.LightPosition.xyz - pos);
         vec3 light_dir = normalize(LightSource.LightPosition.xyz - pos);
-        float LightIntensity = 100.0f * (1.0 / (dist * dist));
+        float LightIntensity = 2000.0f * (1.0 / (dist * dist));
 
         // Compute the light weight to prevent bias
         // W_x = (sum(w_i) / M) / pdf(x)
@@ -294,10 +294,14 @@ vec3 RISReservoirSampling(vec3 pos, vec3 n, vec3 albedo)
         // We moved rcpM = 1 / float(CANDIDATE_MAX) to func RISReservoir which is computing weight for each candidate as suggested by paper
         reservoir.W_y = target_function * (reservoir.totalWeights);
 
-        // Store the current select sample Y, number of candidates M, and probabilistic weight W_y
-        imageStore(ReservoirsImage, ivec2(gl_LaunchIDEXT.xy), vec4(reservoir.index, reservoir.W_y, reservoir.M, 0.0));
 
+        // Perform visibility testing here. Set reservoir weight to 0 if in shadow
         float Visibility = CastShadowRay(pos, n, light_dir, dist - 0.001);
+
+        // Store the current select sample Y, number of candidates M, and probabilistic weight W_y
+        imageStore(ReservoirsImage, ivec2(gl_LaunchIDEXT.xy), vec4(reservoir.index, reservoir.W_y * Visibility, reservoir.M, 0.0));
+
+
         vec3 directLighting = computeDirectLighting(pos, n, albedo, light_dir, LightIntensity, LightSource.LightColour.rgb) * reservoir.W_y * Visibility;
         radiance += throughput * directLighting;
     }
@@ -324,7 +328,7 @@ vec3 NaiveDirectLighting(vec3 pos, vec3 n, vec3 albedo)
         float dist = length(light.LightPosition.xyz - pos);
         float att = 1.0 / (dist * dist);
         LightColour = light.LightColour.xyz;
-        intensity = 100.0f * att;
+        intensity = 2000.0f * att;
 
         float visibility = CastShadowRay(pos, n, lightDir, length(light.LightPosition.xyz - pos) - 0.001);
         vec3 directLighting = computeDirectLighting(pos, n, albedo, lightDir, intensity, LightColour.rgb) * visibility;
@@ -378,6 +382,6 @@ void main()
 
     //vec3 indirectLight = computeIndirectLightingBEFORENEW(worldPos, worldNormal, albedo, sunIntensity);
     vec3 DirectLight = RISReservoirSampling(worldPos, worldNormal, albedo);
-    //vec3 DirectLight = NaiveDirectLighting(worldPos, worldNormal, albedo);
+    // vec3 naive = NaiveDirectLighting(worldPos, worldNormal, albedo);
     rayPayLoad.colour = DirectLight;
 }

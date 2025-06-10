@@ -11,8 +11,9 @@ namespace
 	// This should be placed elsewhere. Put here for simplicity while testing
 	// Don't really need to define these, can pass the pos, dir, up directly to camera constructor
 	// Camera default values
-	constexpr glm::vec3 cameraPos = glm::vec3(1.0f, 1.0f, 1.0f); //1.0f, 2.0f, -24.0f
-	constexpr glm::vec3 cameraDir = glm::vec3(1.0f, 1.0f, -1.0f);
+	// -567, 264, -69w
+	constexpr glm::vec3 cameraPos = glm::vec3(-567.0f, 100.0f, -69.0f); //1.0f, 2.0f, -24.0f
+	constexpr glm::vec3 cameraDir = glm::vec3(1.0f, 20.0f, -1.0f);
 	constexpr glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0);
 }
 
@@ -51,12 +52,22 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	directionalLight.colour   = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
 
 	std::vector<glm::vec4> spotLightPositions;
+	const int gridSize = 10; // 10x10 grid = 100 lights
+	const float xStart = -1000.0f; // Start x-coordinate (Sponza bounds)
+	const float zStart = -400.0f;  // Start z-coordinate
+	const float yStart = 30.0f;  // Fixed height near floor
+	const float xSpacing = 230.0f; // Spacing in x-direction
+	const float zSpacing = 100.0f; // Spacing in z-direction
+	const float ySpacing = 20.0f;
 
-	for (size_t i = 0; i < 51; i++)
-	{
-		spotLightPositions.push_back(glm::vec4(-1300.0 + i * 50.0, 5.0f * i * 1.0f, 5.0f, 1.0f));
+	for (size_t i = 0; i < gridSize; i++) {
+		for (size_t j = 0; j < gridSize; j++) {
+			float x = xStart + i * xSpacing;
+			float y = yStart + i * ySpacing;
+			float z = zStart + j * zSpacing;
+			spotLightPositions.push_back(glm::vec4(x, y, z, 1.0f));
+		}
 	}
-
 
 	// Create the scene which will store models and lights
 	// Add GLTF to the scene
@@ -114,11 +125,11 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	// We will begin with the temporal pass for testing to ensure temporal works
 	m_TemporalPass		= std::make_unique<Temporal>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates(), m_MotionVectorsPass->GetRenderTarget());
 
-	// History pass goes first to temporally reuse past frame reservoirs
-	m_HistoryPass		= std::make_unique<History>(context, m_RayPass->GetRenderTarget());
-
 	// Spatial pass will take in the temporal resampled reservoir results and spatially reuse to resample
 	m_SpatialPass		= std::make_unique<Spatial>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates(), m_TemporalPass->GetRenderTarget());
+
+	// History pass goes first to temporally reuse past frame reservoirs
+	m_HistoryPass = std::make_unique<History>(context, m_RayPass->GetRenderTarget());
 
 	// A final shading pass should go here? Which takes in the Spatial reuse reservoirs and computes lighting. This could perhaps
 	// Happen in the spatial pass? Since we can spatially reuse for the current pixel and then use that updated reservoir for shading output from spatial pass

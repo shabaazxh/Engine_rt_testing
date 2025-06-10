@@ -65,9 +65,10 @@ void vk::ImGuiRenderer::Update(const std::shared_ptr<Scene>& scene, const std::s
         camera->GetPosition().z
     );
 
-
+    ImGui::SliderInt("Enable: ", &rtxSettings.enable, 1, 2);
+    ImGui::SliderInt("M Cap: ", &rtxSettings.M, 1, 100);
     ImGui::SliderInt("Bounces: ", &rtxSettings.bounces, 0, 10);
-    ImGui::SliderInt("PastFrames: ", &rtxSettings.numPastFrames, 0, 10);
+    ImGui::SliderInt("PastFrames: ", &rtxSettings.numPastFrames, 0, 100);
 
     if (ImGui::CollapsingHeader("Directional Light"))
     {
@@ -83,7 +84,7 @@ void vk::ImGuiRenderer::Update(const std::shared_ptr<Scene>& scene, const std::s
         for (size_t i = 1; i < lights.size() - 1; ++i) {
             if (lights[i].Type != LightType::Directional) {
                 std::string label = "Light " + std::to_string(i) + " Position";
-                ImGui::SliderFloat3(label.c_str(), &lights[i].position.x, -600.0f, 600.0f, "%.2f");
+                ImGui::SliderFloat3(label.c_str(), &lights[i].position.x, -1500.0f, 600.0f, "%.2f");
             }
         }
     }

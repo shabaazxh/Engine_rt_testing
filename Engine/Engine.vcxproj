@@ -148,8 +148,8 @@
     <ClCompile Include="..\src\Scene.cpp" />
     <ClCompile Include="..\src\ShadowMap.cpp" />
     <ClCompile Include="..\src\Spatial.cpp" />
-    <ClCompile Include="..\src\Temporal.cpp" />
     <ClCompile Include="..\src\TemporaLCompute.cpp" />
+    <ClCompile Include="..\src\Temporal.cpp" />
     <ClCompile Include="..\src\Utils.cpp" />
     <ClCompile Include="..\src\main.cpp" />
     <ClCompile Include="..\third_party\imgui\imgui.cpp" />

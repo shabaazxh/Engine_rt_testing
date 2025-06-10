@@ -59,7 +59,7 @@ layout(set = 0, binding = 6, scalar) readonly buffer MaterialBuffer {
 
 layout(set = 0, binding = 7) uniform sampler2D textures[300];
 
-const int NUM_LIGHTS = 51;
+const int NUM_LIGHTS = 100;
 
 layout(set = 0, binding = 8) uniform LightBuffer {
 	Light lights[NUM_LIGHTS];
@@ -70,6 +70,8 @@ layout(set = 0, binding = 9) uniform RTXSettings
     int bounces;
     int frameIndex;
     int numPastFrames;
+    int enable;
+    int M;
 } rtx;
 
 layout(set = 0, binding = 10) uniform sampler2D InitialCandidates;
@@ -171,11 +173,11 @@ struct Reservoir
     int M;
 };
 
-void update(uint seed, inout Reservoir reservoir, in float xi_weight, int index, int previousM, int currentPixelReservoirM)
+void update(uint seed, inout Reservoir reservoir, in float xi_weight, int index, int previousM)
 {
     reservoir.totalWeights = reservoir.totalWeights + xi_weight;
     float r = GetRandomNumber(seed);
-    reservoir.M += min(previousM, 20 * currentPixelReservoirM); // Paper at the end suggests clamping M for temporal reuse
+    reservoir.M += previousM; // Paper at the end suggests clamping M for temporal reuse
     if(r < (xi_weight / reservoir.totalWeights))
     {
         reservoir.index = index;
@@ -217,7 +219,8 @@ Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed,
 
     // Get the previous frame pixel position by subtracting the motion vector from the current pixel position
     ivec2 current_pixel = ivec2(gl_LaunchIDEXT.xy);
-    ivec2 previous_pixel = ivec2(current_pixel - (motion_vector * ubo.viewportSize)); // motion_vector is difference between UV, we need it in pixels so multiply by viewportsize
+    ivec2 previous_pixel = ivec2(current_pixel - (motion_vector * (ubo.viewportSize))); // motion_vector is difference between UV, we need it in pixels so multiply by viewportsize
+    previous_pixel = clamp(previous_pixel, ivec2(0), ivec2(ubo.viewportSize - vec2(1)));
 
     reservoirs[0].index = int(current_pixel_reservoir_data.x);
     reservoirs[0].W_y = current_pixel_reservoir_data.y;
@@ -225,26 +228,23 @@ Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed,
 
     reservoirs[1].index = int(texelFetch(PreviousFrame, previous_pixel, 0).x);
     reservoirs[1].W_y   = texelFetch(PreviousFrame, previous_pixel, 0).y;
-    reservoirs[1].M = int(texelFetch(PreviousFrame, previous_pixel, 0).z);
-
-    const float uniform_PDF_weight = 1.0 / float(NUM_LIGHTS);
-    // Index into the light array to get the light data
+    reservoirs[1].M = min(int(texelFetch(PreviousFrame, previous_pixel, 0).z), rtx.M); // 20 * reservoirs[0].M
 
     for(int i = 0; i < 2; i++) {
         Light L = lightData.lights[reservoirs[i].index];
 
         float dist = length(L.LightPosition.xyz - pos);
         const vec3 LightDir = normalize(L.LightPosition.xyz - pos);
-        const float LightIntensity = 100.0f * (1.0 / (dist * dist));
+        const float LightIntensity = 2000.0f * (1.0 / (dist * dist));
 
         // Evaluate F(x) at the current pixel
-        float F_x = max(dot(n, LightDir), 0.001) * LightIntensity; // Simplied F(x) only doing diffuse
+        float F_x = max(dot(n, LightDir), 0.0) * LightIntensity; // Simplied F(x) only doing diffuse
 
         // Algorithm 4: Line: 4: p^q(r.y) * r.W * r.M
         float w_i = F_x * reservoirs[i].W_y * reservoirs[i].M;
 
         // Update the reservoir using current sample data
-        update(seed, reservoir, w_i, reservoirs[i].index, reservoirs[i].M, int(current_pixel_reservoir_data.z));
+        update(seed, reservoir, w_i, reservoirs[i].index, reservoirs[i].M);
     }
 
     return reservoir;
@@ -256,7 +256,6 @@ vec4 Temporal(vec3 n, vec3 pos, vec3 albedo)
     uint seed = uint(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x) + gl_LaunchIDEXT.x;
     seed *= rtx.frameIndex;
     vec3 throughput = vec3(1.0);
-    uint pixelIndex = gl_LaunchIDEXT.y * 1280 + gl_LaunchIDEXT.x;
     vec4 pixelReservoir = texelFetch(InitialCandidates, ivec2(gl_LaunchIDEXT.xy), 0).rgba; // (x = index, y = W_y, z = totalWeights, w = M)
 
     Reservoir reservoir = combine_reservoirs(pixelReservoir, seed, n, pos);
@@ -269,19 +268,16 @@ vec4 Temporal(vec3 n, vec3 pos, vec3 albedo)
     vec3 LightDir = normalize(L.LightPosition.xyz - pos);
     float dist = length(L.LightPosition.xyz - pos);
     float att = 1.0 / (dist * dist);
-    float intensity = 100.0f * att;
-    float F_x = max(dot(n, LightDir), 0.001) * intensity; // F(x) = max(dot(n, L), 0.001) * intensity, where n is the normal and L is the light direction
+    float intensity = 2000.0f * att;
+    float F_x = max(dot(n, LightDir), 0.0) * intensity; // F(x) = max(dot(n, L), 0.001) * intensity, where n is the normal and L is the light direction
     float target_function = 1.0 / F_x; // Reciprocal of the target function F(x) that PDF(X) approximates better with more candidates.
 
     // Algorithm 4: Line 6: Reservoir s: s.W = 1 / p^q(s.y) * ( 1 / s.M  * s.totalWeights )
-    reservoir.W_y = target_function * (1.0 / reservoir.M) * reservoir.totalWeights;
+    reservoir.W_y = F_x > 0.0 ? (1.0 / F_x) * (1.0 / reservoir.M) * reservoir.totalWeights : 0.0;
 
     return vec4(reservoir.index, reservoir.W_y, reservoir.M, 0.0);
 }
 
-
-// @TODO: This pass is currently using the initial candidates and just sampling them directly to reproduce
-// the same results as seen in the initial candidates pass to ensure the data in the texture is correct before we do spatial reuse
 void main()
 {
 	const int primitiveID = gl_PrimitiveID;

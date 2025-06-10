@@ -246,6 +246,8 @@ void vk::Spatial::Update()
 {
 	rtxSettings.bounces = rtxSettings.bounces;
 	rtxSettings.frameIndex = (frameNumber);
+	rtxSettings.M = rtxSettings.M;
+	rtxSettings.enable = rtxSettings.enable;
 	m_rtxSettingsUBO[currentFrame].WriteToBuffer(&rtxSettings, sizeof(RTX));
 }
 

@@ -17,7 +17,7 @@ class Context;
 
 #define ERROR(message) std::cout << "[ERROR]: " << message << std::endl; \
 
-constexpr int NUM_LIGHTS = 51;
+constexpr int NUM_LIGHTS = 100;
 
 namespace vk
 {
@@ -79,6 +79,8 @@ namespace vk
 		alignas(4) int bounces;
 		alignas(4) int frameIndex;
 		alignas(4) int numPastFrames;
+		alignas(4) int enable;
+		alignas(4) int M;
 	};
 
 	struct Reservoir
@@ -96,7 +98,7 @@ namespace vk
 	inline double deltaTime;
 	inline uint32_t setRenderingPipeline = 1;
 	inline uint32_t setAlphaMakingPipeline = 2;
-	inline RTX rtxSettings = { 1, 0, 2 };
+	inline RTX rtxSettings = { 1, 0, 2, 1, 20 };
 	inline VkDescriptorSetLayout materialDescriptorSetLayout;
 	inline uint32_t frameNumber = 0;
 	inline bool isAccumulating = false;

@@ -168,7 +168,7 @@ void vk::PresentPass::BuildDescriptors()
 	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
 	{
 		VkDescriptorImageInfo imgInfo = {
-			.sampler = repeatSampler,
+			.sampler = clampToEdgeSamplerAniso,
 			.imageView = renderedScene.imageView,
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL // VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		};
@@ -180,7 +180,7 @@ void vk::PresentPass::BuildDescriptors()
 	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
 	{
 		VkDescriptorImageInfo imgInfo = {
-			.sampler = repeatSampler,
+			.sampler = clampToEdgeSamplerAniso,
 			.imageView = nonTemporalRenderedScene.imageView,
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		};
