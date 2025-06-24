@@ -22,6 +22,7 @@ namespace vk
 		Image& GetRenderTarget() { return m_RenderTarget; }
 		Image& GetInitialCandidates() { return m_InitialCandidates; }
 		Image& GetWorldHitPositions() { return m_WorldPositionsTarget; }
+		Image& GetHitNormals() { return m_NormalsTarget; }
 
 	private:
 		void CreatePipeline();

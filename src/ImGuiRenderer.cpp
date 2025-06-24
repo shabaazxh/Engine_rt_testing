@@ -67,8 +67,8 @@ void vk::ImGuiRenderer::Update(const std::shared_ptr<Scene>& scene, const std::s
 
     ImGui::SliderInt("Enable: ", &rtxSettings.enable, 1, 2);
     ImGui::SliderInt("M Cap: ", &rtxSettings.M, 1, 100);
-    ImGui::SliderInt("Bounces: ", &rtxSettings.bounces, 0, 10);
-    ImGui::SliderInt("PastFrames: ", &rtxSettings.numPastFrames, 0, 100);
+    ImGui::SliderInt("Enabled: ", &rtxSettings.bounces, 0, 10);
+    ImGui::SliderInt("Radius: ", &rtxSettings.numPastFrames, 0, 100);
 
     if (ImGui::CollapsingHeader("Directional Light"))
     {

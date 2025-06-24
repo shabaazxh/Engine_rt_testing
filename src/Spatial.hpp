@@ -12,7 +12,7 @@ namespace vk
 	class Spatial
 	{
 	public:
-		explicit Spatial(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initialCandidates, Image& TemporalReuseReservoirs);
+		explicit Spatial(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initialCandidates, Image& TemporalReuseReservoirs, Image& HitNormals, Image& HitWorldPos);
 		~Spatial();
 
 		void Execute(VkCommandBuffer cmd);
@@ -33,6 +33,8 @@ namespace vk
 		Image m_SpatialReuseReservoirs;
 		Image& initialCandidates;
 		Image& TemporalReuseReservoirs;
+		Image& HitNormals;
+		Image& HitWorldPos;
 
 		VkPipeline m_Pipeline;
 		VkPipelineLayout m_PipelineLayout;

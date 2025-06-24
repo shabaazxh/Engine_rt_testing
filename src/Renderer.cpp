@@ -123,10 +123,10 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	// For now, we should store the output from the temporal pass as "previous frame" and this should hopefully work
 	// Once that works, we can extend it and make previous frame be the output from the spatial pass
 	// We will begin with the temporal pass for testing to ensure temporal works
-	m_TemporalPass		= std::make_unique<Temporal>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates(), m_MotionVectorsPass->GetRenderTarget());
+	m_TemporalPass		= std::make_unique<Temporal>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates(), m_MotionVectorsPass->GetRenderTarget(), m_RayPass->GetHitNormals(), m_RayPass->GetWorldHitPositions());
 
 	// Spatial pass will take in the temporal resampled reservoir results and spatially reuse to resample
-	m_SpatialPass		= std::make_unique<Spatial>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates(), m_TemporalPass->GetRenderTarget());
+	m_SpatialPass		= std::make_unique<Spatial>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates(), m_TemporalPass->GetRenderTarget(), m_RayPass->GetHitNormals(), m_RayPass->GetWorldHitPositions());
 
 	// History pass goes first to temporally reuse past frame reservoirs
 	m_HistoryPass = std::make_unique<History>(context, m_RayPass->GetRenderTarget());

@@ -12,7 +12,7 @@ namespace vk
 	class Temporal
 	{
 	public:
-		explicit Temporal(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initialCandidates, Image& MotionVectors);
+		explicit Temporal(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initialCandidates, Image& MotionVectors, Image& HitNormals, Image& HitWorldPos);
 		~Temporal();
 
 		void Execute(VkCommandBuffer cmd);
@@ -34,6 +34,8 @@ namespace vk
 		Image m_PreviousImage;
 		Image& initialCandidates;
 		Image& MotionVectors;
+		Image& HitNormals;
+		Image& HitWorldPos;
 
 		VkPipeline m_Pipeline;
 		VkPipelineLayout m_PipelineLayout;

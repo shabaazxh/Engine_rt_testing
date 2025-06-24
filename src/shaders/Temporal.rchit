@@ -77,6 +77,8 @@ layout(set = 0, binding = 9) uniform RTXSettings
 layout(set = 0, binding = 10) uniform sampler2D InitialCandidates;
 layout(set = 0, binding = 11) uniform sampler2D PreviousFrame;
 layout(set = 0, binding = 12) uniform sampler2D MotionVectors;
+layout(set = 0, binding = 13) uniform sampler2D HitNormals;
+layout(set = 0, binding = 14) uniform sampler2D HitWorldPos;
 
 
 struct RayPayLoad
@@ -144,6 +146,15 @@ vec3 computeDirectLighting(vec3 worldPos, vec3 worldNormal, vec3 albedo, vec3 li
     return brdf * lightColour * lightIntensity * cosTheta;
 }
 
+vec3 ComputeDiffuseBRDF(vec3 worldPos, vec3 worldNormal, vec3 albedo, vec3 lightDirection, float lightIntensity, vec3 lightColour) {
+
+    vec3 L = normalize(lightDirection);
+    float cosTheta = max(dot(worldNormal, L), 0.0);
+    vec3 brdf = albedo / PI; // Diffuse BRDF - All surfaces assumed Diffuse
+    return brdf * lightColour * lightIntensity * cosTheta;
+
+}
+
 float CastShadowRay(vec3 pos, vec3 normal, vec3 lightDir, float dist) {
 
     vec3 L = (lightDir); // Directional light
@@ -196,7 +207,7 @@ void update(uint seed, inout Reservoir reservoir, in float xi_weight, int index,
 
 // All these initial candidates used a uniform distribution i.e 1 / NUM_LIGHTS
 
-Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed, vec3 n, vec3 pos)
+Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed, vec3 n, vec3 pos, vec3 albedo, inout vec3 previous_pixel_normal, inout vec3 previous_pixel_position, inout int previous_pixel_reservoir_m)
 {
     // Init a reservoir with the current pixel reservoir data
     Reservoir reservoir;;
@@ -222,6 +233,10 @@ Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed,
     ivec2 previous_pixel = ivec2(current_pixel - (motion_vector * (ubo.viewportSize))); // motion_vector is difference between UV, we need it in pixels so multiply by viewportsize
     previous_pixel = clamp(previous_pixel, ivec2(0), ivec2(ubo.viewportSize - vec2(1)));
 
+    // get the normal of the previous pixel
+    previous_pixel_normal = texelFetch(HitNormals, previous_pixel, 0).xyz;
+    previous_pixel_position = texelFetch(HitWorldPos, previous_pixel, 0).xyz;
+
     reservoirs[0].index = int(current_pixel_reservoir_data.x);
     reservoirs[0].W_y = current_pixel_reservoir_data.y;
     reservoirs[0].M = int(current_pixel_reservoir_data.z);
@@ -229,6 +244,7 @@ Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed,
     reservoirs[1].index = int(texelFetch(PreviousFrame, previous_pixel, 0).x);
     reservoirs[1].W_y   = texelFetch(PreviousFrame, previous_pixel, 0).y;
     reservoirs[1].M = min(int(texelFetch(PreviousFrame, previous_pixel, 0).z), rtx.M); // 20 * reservoirs[0].M
+    previous_pixel_reservoir_m = reservoirs[1].M; // Store the previous pixel reservoir M for later use
 
     for(int i = 0; i < 2; i++) {
         Light L = lightData.lights[reservoirs[i].index];
@@ -238,7 +254,7 @@ Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed,
         const float LightIntensity = 2000.0f * (1.0 / (dist * dist));
 
         // Evaluate F(x) at the current pixel
-        float F_x = max(dot(n, LightDir), 0.0) * LightIntensity; // Simplied F(x) only doing diffuse
+        float F_x = max(dot(n, LightDir), 0.0) * LightIntensity; // length(ComputeDiffuseBRDF(pos, n, albedo, LightDir, LightIntensity, L.LightColour.rgb)); // Simplied F(x) only doing diffuse
 
         // Algorithm 4: Line: 4: p^q(r.y) * r.W * r.M
         float w_i = F_x * reservoirs[i].W_y * reservoirs[i].M;
@@ -258,22 +274,60 @@ vec4 Temporal(vec3 n, vec3 pos, vec3 albedo)
     vec3 throughput = vec3(1.0);
     vec4 pixelReservoir = texelFetch(InitialCandidates, ivec2(gl_LaunchIDEXT.xy), 0).rgba; // (x = index, y = W_y, z = totalWeights, w = M)
 
-    Reservoir reservoir = combine_reservoirs(pixelReservoir, seed, n, pos);
+
+    vec3 previous_pixel_normal = vec3(0);
+    vec3 previous_pixel_position = vec3(0);
+    int previous_pixel_reservoir_m = -1;
+    Reservoir reservoir = combine_reservoirs(pixelReservoir, seed, n, pos, albedo, previous_pixel_normal, previous_pixel_position, previous_pixel_reservoir_m);
 
     // The reservoir should now contain the new updated sample
     // Use the index from the reservoir to fetch the light data
     Light L = lightData.lights[reservoir.index];
 
+    // Compute Z
+    int z = 0;
+    // Compute F(x) for previous pixel + visibility
+    vec3 previous_pixel_lighting_direction = normalize(L.LightPosition.xyz - previous_pixel_position);
+    float previous_pixel_light_dist = length(L.LightPosition.xyz - previous_pixel_position);
+    float previous_pixel_light_intensity = 2000.0f * (1.0 / (previous_pixel_light_dist * previous_pixel_light_dist));
+
+    // Cast the shadow ray
+    float previous_pixel_visibility = CastShadowRay(previous_pixel_position, previous_pixel_normal, previous_pixel_lighting_direction, previous_pixel_light_dist);
+
+    // Compute f(x)
+    float previous_pixel_p_hat = max(dot(previous_pixel_normal, previous_pixel_lighting_direction), 0.0) * previous_pixel_light_intensity * previous_pixel_visibility; // F(x) for previous pixel
+    if(previous_pixel_p_hat > 0.0)
+    {
+        // add the previous pixels reservoir M to Z
+        z = z + previous_pixel_reservoir_m;
+    }
+
+    // Current pixel
     // Compute lighting using this light source
     vec3 LightDir = normalize(L.LightPosition.xyz - pos);
     float dist = length(L.LightPosition.xyz - pos);
     float att = 1.0 / (dist * dist);
-    float intensity = 2000.0f * att;
-    float F_x = max(dot(n, LightDir), 0.0) * intensity; // F(x) = max(dot(n, L), 0.001) * intensity, where n is the normal and L is the light direction
-    float target_function = 1.0 / F_x; // Reciprocal of the target function F(x) that PDF(X) approximates better with more candidates.
+    float LightIntensity = 2000.0f * att;
+    float F_x = max(dot(n, LightDir), 0.0) * LightIntensity; //length(ComputeDiffuseBRDF(pos, n, albedo, LightDir, intensity, L.LightColour.rgb)); // F(x) = max(dot(n, L), 0.001) * intensity, where n is the normal and L is the light direction
 
     // Algorithm 4: Line 6: Reservoir s: s.W = 1 / p^q(s.y) * ( 1 / s.M  * s.totalWeights )
     reservoir.W_y = F_x > 0.0 ? (1.0 / F_x) * (1.0 / reservoir.M) * reservoir.totalWeights : 0.0;
+
+    float current_pixel_visbility = CastShadowRay(pos, n, LightDir, dist);
+    float current_pixel_p_hat = F_x * current_pixel_visbility;
+    if(current_pixel_p_hat > 0.0)
+    {
+        // add the current pixels reservoir M to Z
+        z = z + min(int(pixelReservoir.z), rtx.M);
+    }
+
+    float m = (z > 0) ? 1.0 / float(z) : 0.0;
+
+
+    if(rtx.bounces == 3) {
+        // F_x = F_x * current_pixel_visbility;
+        reservoir.W_y = F_x > 0.0 ? (1.0 / F_x) * (m * reservoir.totalWeights) : 0.0;
+    }
 
     return vec4(reservoir.index, reservoir.W_y, reservoir.M, 0.0);
 }

@@ -77,6 +77,8 @@ layout(set = 0, binding = 9) uniform RTXSettings
 layout(set = 0, binding = 10) uniform sampler2D InitialCandidatesImage;
 layout(set = 0, binding = 11, rgba32f) uniform image2D SpatialReservoirStore;
 layout(set = 0, binding = 12) uniform sampler2D TemporalReuseReservoirs;
+layout(set = 0, binding = 13) uniform sampler2D HitNormals;
+layout(set = 0, binding = 14) uniform sampler2D HitWorldPos;
 
 struct RayPayLoad
 {
@@ -147,6 +149,15 @@ vec3 computeDirectLighting(vec3 worldPos, vec3 worldNormal, vec3 albedo, vec3 li
     float cosTheta = max(dot(worldNormal, L), 0.0);
     vec3 brdf = albedo / PI; // Diffuse BRDF - All surfaces assumed Diffuse
     return brdf * lightColour * lightIntensity * cosTheta;
+}
+
+vec3 ComputeDiffuseBRDF(vec3 worldPos, vec3 worldNormal, vec3 albedo, vec3 lightDirection, float lightIntensity, vec3 lightColour) {
+
+    vec3 L = normalize(lightDirection);
+    float cosTheta = max(dot(worldNormal, L), 0.0);
+    vec3 brdf = albedo / PI; // Diffuse BRDF - All surfaces assumed Diffuse
+    return brdf * lightColour * lightIntensity * cosTheta;
+
 }
 
 vec3 DiffuseBRDF(vec3 normal, vec3 position, vec3 albedo, vec3 LightDirection, vec3 LightColour, float LightIntensity)
@@ -248,62 +259,10 @@ void RISReservoir(inout Reservoir reservoir, uint seed, vec3 pos, vec3 n, inout 
     }
 }
 
-vec3 RISReservoirSampling(vec3 pos, vec3 n, vec3 albedo)
-{
-    uint seed = uint(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x) + gl_LaunchIDEXT.x;
-    seed *= rtx.frameIndex;
-
-    vec3 radiance = vec3(0.0);
-    vec3 throughput = vec3(1.0);
-
-    Reservoir reservoir;
-    reservoir.totalWeights = 0.0;
-    reservoir.W_y = 0.0;
-    reservoir.index = -1;
-
-    Candidate candidates[CANDIDATE_MAX];
-
-    // Compute the weights of the candidates from the original distribution
-    RISReservoir(reservoir, seed, pos, n, candidates, albedo);
-
-    bool isValidIndex = reservoir.index > -1;
-
-    if(isValidIndex) {
-        // The selected light
-        Candidate LightSource = reservoir.Y;
-        uint pixelIndex = gl_LaunchIDEXT.y * 1280 + gl_LaunchIDEXT.x;
-
-        //ReservoirStorageBuffer.reservoirs[pixelIndex] = r;
-
-        // Compute the light weight to prevent bias
-        // W_x = (sum(w_i) / M) / pdf(x)
-        // Written as: 1 / pdf(x) * (1 / m * sum(w_i)), but remember 1 / pdf(x) and 1 / m is the same as dividing by them since 1 / x is rcp
-        float rcpPDF = 1.0 / LightSource.Fx;
-
-        // This is debug to ensure its valid, remove eventually
-        if (isinf(rcpPDF))
-            return vec3(1.0, 0.0, 1.0);
-
-        // Evaluate the unbiased constribuion weight W_x
-        // We moved rcpM = 1 / float(CANDIDATE_MAX) when computing weight for each candidate as suggested by paper
-        float W_x = rcpPDF * (reservoir.totalWeights);
-        reservoir.W_y = W_x;
-
-        // Compute direct lighting using the elected light source
-        float Visibility = CastShadowRay(pos, n, LightSource.lightDir, length(LightSource.light.LightPosition.xyz - pos) - 0.001);
-        vec3 directLighting = computeDirectLighting(pos, n, albedo, LightSource.lightDir, LightSource.intensity, LightSource.light.LightColour.rgb) * W_x * Visibility;
-        radiance += throughput * directLighting;
-    }
-
-
-
-    return radiance;
-}
 
 vec3 Verify(vec3 n, vec3 pos, vec3 albedo)
 {
     vec3 throughput = vec3(1.0);
-    uint pixelIndex = gl_LaunchIDEXT.y * 1280 + gl_LaunchIDEXT.x;
     vec3 pixelReservoir = texelFetch(InitialCandidatesImage, ivec2(gl_LaunchIDEXT.xy), 0).rgb;
 
     float W_y = pixelReservoir.y;
@@ -315,9 +274,10 @@ vec3 Verify(vec3 n, vec3 pos, vec3 albedo)
     float dist = length(L.LightPosition.xyz - pos);
     float att = 1.0 / (dist * dist);
     float intensity = 2000.0f * att;
+    float Fx = max(dot(n, LightDir), 0.0) * intensity;
 
     float Visibility = CastShadowRay(pos, n, LightDir, dist - 0.001);
-    vec3 directLighting = computeDirectLighting(pos, n, albedo, LightDir, intensity, L.LightColour.rgb);
+    vec3 directLighting = albedo * Fx * L.LightColour.rgb; //computeDirectLighting(pos, n, albedo, LightDir, intensity, L.LightColour.rgb);
     vec3 radiance = throughput * directLighting * W_y * Visibility;
 
     return radiance;
@@ -362,7 +322,8 @@ void update(uint seed, inout Reservoir reservoir, in float xi_weight, int index,
 // across pixels, if you're using different PDFs, the expectation is that nearby pixels might have used
 // A different PDF compared to the others thus, MIS is needed to compute a balance heuristic.
 
-Reservoir combine_reservoirs_spatial_reuse(vec4 current_pixel_reservoir_data, inout uint seed, vec3 n, vec3 pos)
+bool isvalid = true;
+Reservoir combine_reservoirs_spatial_reuse(vec4 current_pixel_reservoir_data, inout uint seed, vec3 n, vec3 pos, vec3 albedo, inout float m)
 {
     const int NUM_SPATIAL_NEIGHBOURS = 5; // 5 spatial neighbouring including the current pixel
     Reservoir reservoir;
@@ -372,6 +333,8 @@ Reservoir combine_reservoirs_spatial_reuse(vec4 current_pixel_reservoir_data, in
     reservoir.totalWeights = 0.0;
 
     Reservoir neighbouring_reservoirs[NUM_SPATIAL_NEIGHBOURS]; // We will find 4 neighbours and fill this array
+    vec3 neighbouring_normals[NUM_SPATIAL_NEIGHBOURS];
+    vec3 neightbouring_position[NUM_SPATIAL_NEIGHBOURS];
 
     // Init all reservoirs
     for(int i = 0; i < NUM_SPATIAL_NEIGHBOURS; i++)
@@ -380,6 +343,8 @@ Reservoir combine_reservoirs_spatial_reuse(vec4 current_pixel_reservoir_data, in
         neighbouring_reservoirs[i].W_y = 0.0f;
         neighbouring_reservoirs[i].M = 0;
         neighbouring_reservoirs[i].totalWeights = 0.0f;
+        neighbouring_normals[i] = vec3(0.0);
+        neightbouring_position[i] = vec3(0.0);
     }
 
     ivec2 current_pixel = ivec2(gl_LaunchIDEXT.xy);
@@ -387,6 +352,8 @@ Reservoir combine_reservoirs_spatial_reuse(vec4 current_pixel_reservoir_data, in
     neighbouring_reservoirs[0].index = int(current_pixel_reservoir_data.x); // Current pixel index
     neighbouring_reservoirs[0].W_y = current_pixel_reservoir_data.y; // Current pixel weight
     neighbouring_reservoirs[0].M = int(current_pixel_reservoir_data.z); // Current pixel M
+    neightbouring_position[0] = pos;
+    neighbouring_normals[0] = n;
 
     for(uint i = 1; i < NUM_SPATIAL_NEIGHBOURS; i++)
     {
@@ -402,6 +369,8 @@ Reservoir combine_reservoirs_spatial_reuse(vec4 current_pixel_reservoir_data, in
         neighbouring_reservoirs[i].index = int(texelFetch(TemporalReuseReservoirs, sample_pixel, 0).x);
         neighbouring_reservoirs[i].W_y   = texelFetch(TemporalReuseReservoirs, sample_pixel, 0).y;
         neighbouring_reservoirs[i].M     = min(int(texelFetch(TemporalReuseReservoirs, sample_pixel, 0).z), rtx.M); // 20 * int(current_pixel_reservoir_data.z)
+        neighbouring_normals[i] = texelFetch(HitNormals, sample_pixel, 0).xyz;
+        neightbouring_position[i] = texelFetch(HitWorldPos, sample_pixel, 0).xyz;
     }
 
     // Update the reservoir using the neighbouring reservoirs
@@ -414,7 +383,7 @@ Reservoir combine_reservoirs_spatial_reuse(vec4 current_pixel_reservoir_data, in
         const float LightIntensity = 2000.0f * (1.0 / (dist * dist));
 
         // Evaluate F(x) at the current pixel
-        float F_x = max(dot(n, LightDir), 0.0) * LightIntensity; // Simplied F(x) only doing diffuse
+        float F_x = max(dot(n, LightDir), 0.0) * LightIntensity; //length(ComputeDiffuseBRDF(pos, n, albedo, LightDir, LightIntensity, L.LightColour.rgb)); // Simplied F(x) only doing diffuse
 
         // Algorithm 4: Line: 4: p^q(r.y) * r.W * r.M
         float w_i = F_x * neighbouring_reservoirs[i].W_y * neighbouring_reservoirs[i].M;
@@ -422,6 +391,28 @@ Reservoir combine_reservoirs_spatial_reuse(vec4 current_pixel_reservoir_data, in
         // Update the reservoir using current sample data
         update(seed, reservoir, w_i, neighbouring_reservoirs[i].index, neighbouring_reservoirs[i].M);
     }
+
+
+    // The resampling process results in a final sample in the reservoir which can now be used.
+    Light L = lightData.lights[reservoir.index];
+    int z = 0;
+    for(uint i = 0; i < NUM_SPATIAL_NEIGHBOURS; i++)
+    {
+        float light_dist = length(L.LightPosition.xyz - neightbouring_position[i]);
+        vec3 lighting_direction = normalize(L.LightPosition.xyz - neightbouring_position[i]);
+        float attenuation = 1.0 / (light_dist * light_dist);
+        float light_intensity = 2000.0f * attenuation;
+
+        float visibility = CastShadowRay(neightbouring_position[i], neighbouring_normals[i], lighting_direction, light_dist);
+        float pixel_p_hat = max(dot(neighbouring_normals[i], lighting_direction), 0.0) * light_intensity * visibility;
+        if(pixel_p_hat > 0.0)
+        {
+            // Add the neighbouring pixels reservoir M to Z
+            z = z + neighbouring_reservoirs[i].M;
+        }
+    }
+
+    m = (z > 0) ? 1.0 / float(z) : 0.0;
 
     return reservoir;
 }
@@ -434,7 +425,8 @@ vec4 Spatial(vec3 n, vec3 pos, vec3 albedo)
     vec3 throughput = vec3(1.0);
     vec4 pixelReservoir = texelFetch(TemporalReuseReservoirs, ivec2(gl_LaunchIDEXT.xy), 0).rgba;
 
-    Reservoir reservoir = combine_reservoirs_spatial_reuse(pixelReservoir, seed, n, pos);
+    float m = 0.0;
+    Reservoir reservoir = combine_reservoirs_spatial_reuse(pixelReservoir, seed, n, pos, albedo, m);
 
     // The reservoir should now contain the new updated sample
     // Use the index from the reservoir to fetch the light data
@@ -444,15 +436,22 @@ vec4 Spatial(vec3 n, vec3 pos, vec3 albedo)
     vec3 LightDir = normalize(L.LightPosition.xyz - pos);
     float dist = length(L.LightPosition.xyz - pos);
     float att = 1.0 / (dist * dist);
-    float intensity = 2000.0f * att;
-    float Fx = max(dot(n, LightDir), 0.0) * intensity; // Simplied F(x) only doing diffuse
+    float LightIntensity = 2000.0f * att;
+    float Fx = max(dot(n, LightDir), 0.0) * LightIntensity; //length(ComputeDiffuseBRDF(pos, n, albedo, LightDir, intensity, L.LightColour.rgb)); // Simplied F(x) only doing diffuse
 
-    reservoir.W_y = Fx > 0.0 ? (1.0 / Fx) * (1.0 / reservoir.M) * reservoir.totalWeights : 0.0;
+    float Visibility = CastShadowRay(pos, n, LightDir, dist);
+    //Fx = Fx * Visibility;
+
+    if(rtx.bounces == 3) {
+        reservoir.W_y = Fx > 0.0 ? (1.0 / Fx) * (m * reservoir.totalWeights) : 0.0;
+    } else
+    {
+        reservoir.W_y = Fx > 0.0 ? (1.0 / Fx) * (1.0 / reservoir.M) * reservoir.totalWeights : 0.0;
+    }
 
     imageStore(SpatialReservoirStore, ivec2(gl_LaunchIDEXT.xy), vec4(reservoir.index, reservoir.W_y, reservoir.M, 0.0));
 
-    float Visibility = CastShadowRay(pos, n, LightDir, dist - 0.001);
-    vec3 directLighting = computeDirectLighting(pos, n, albedo, LightDir, intensity, L.LightColour.rgb);
+    vec3 directLighting = albedo * Fx * L.LightColour.rgb;
     vec3 radiance = throughput * directLighting * reservoir.W_y * Visibility;
 
     return vec4(radiance, 0.0);

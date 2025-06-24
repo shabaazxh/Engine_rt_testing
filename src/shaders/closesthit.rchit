@@ -143,11 +143,13 @@ vec3 FresnelShlick(float cosTheta, float metalness)
     return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
-vec3 computeDirectLighting(vec3 worldPos, vec3 worldNormal, vec3 albedo, vec3 lightDirection, float lightIntensity, vec3 lightColour) {
+vec3 ComputeDiffuseBRDF(vec3 worldPos, vec3 worldNormal, vec3 albedo, vec3 lightDirection, float lightIntensity, vec3 lightColour) {
+
     vec3 L = normalize(lightDirection);
     float cosTheta = max(dot(worldNormal, L), 0.0);
     vec3 brdf = albedo / PI; // Diffuse BRDF - All surfaces assumed Diffuse
     return brdf * lightColour * lightIntensity * cosTheta;
+
 }
 
 
@@ -213,6 +215,7 @@ void update(inout uint seed, inout Reservoir reservoir, in float xi_weight, int 
         reservoir.index = index;
     }
 }
+//vec3 ComputeDiffuseBRDF(vec3 worldPos, vec3 worldNormal, vec3 albedo, vec3 lightDirection, float lightIntensity, vec3 lightColour) {
 
 void RISReservoir(inout Reservoir reservoir, inout uint seed, vec3 pos, vec3 n, vec3 albedo)
 {
@@ -232,7 +235,7 @@ void RISReservoir(inout Reservoir reservoir, inout uint seed, vec3 pos, vec3 n, 
         float LightIntensity = 2000.0f * (1.0 / (dist * dist));
 
         // Compute RIS weight for this candidate light
-        float F_x = max(dot(n, light_dir), 0.001) * LightIntensity; // Simplied F(x) for weighting. Not sure if need to compute entir BRDF * cosine * ....?  // The target function F(x) that PDF(X) approximates better with more candidates. Using lambert cosine term but this can be other importance sampling methods
+        float F_x = max(dot(n, light_dir), 0.0) * LightIntensity; //length(ComputeDiffuseBRDF(pos, n, albedo, light_dir, LightIntensity, light.LightColour.rgb)); // Simplied F(x) for weighting. Not sure if need to compute entir BRDF * cosine * ....?  // The target function F(x) that PDF(X) approximates better with more candidates. Using lambert cosine term but this can be other importance sampling methods
 
         // This is p^q(x_i) / p(x_i) where p^q(x_i) is the target function F_x and p(x_i) is the PDF of the uniform distribution which is 1 / NUM_LIGHTS. So we can compute the weight as F_x * rcpUniformDistributionWeight = F_x * (1 / NUM_LIGHTS) = F_x / NUM_LIGHTS
         float xi_weight = rcpM * F_x * rcpUniformDistributionWeight; // Move 1.0 / M to here when computing weight as suggested
@@ -283,7 +286,7 @@ vec3 RISReservoirSampling(vec3 pos, vec3 n, vec3 albedo)
         // Compute the light weight to prevent bias
         // W_x = (sum(w_i) / M) / pdf(x)
         // Written as: 1 / pdf(x) * (1 / m * sum(w_i)), but remember 1 / pdf(x) and 1 / m is the same as dividing by them since 1 / x is rcp
-        float Fx = max(dot(n, light_dir), 0.001) * LightIntensity;
+        float Fx = max(dot(n, light_dir), 0.0) * LightIntensity; //length(ComputeDiffuseBRDF(pos, n, albedo, light_dir, LightIntensity, LightSource.LightColour.rgb));
         float target_function = 1.0 / Fx; //  float(NUM_LIGHTS);
 
         // This is debug to ensure its valid, remove eventually -> this has an issue atm @TODO
@@ -294,16 +297,15 @@ vec3 RISReservoirSampling(vec3 pos, vec3 n, vec3 albedo)
         // We moved rcpM = 1 / float(CANDIDATE_MAX) to func RISReservoir which is computing weight for each candidate as suggested by paper
         reservoir.W_y = target_function * (reservoir.totalWeights);
 
-
         // Perform visibility testing here. Set reservoir weight to 0 if in shadow
         float Visibility = CastShadowRay(pos, n, light_dir, dist - 0.001);
 
+        reservoir.W_y *= Visibility; // If in shadow, W_y will be 0.0
         // Store the current select sample Y, number of candidates M, and probabilistic weight W_y
-        imageStore(ReservoirsImage, ivec2(gl_LaunchIDEXT.xy), vec4(reservoir.index, reservoir.W_y * Visibility, reservoir.M, 0.0));
+        imageStore(ReservoirsImage, ivec2(gl_LaunchIDEXT.xy), vec4(reservoir.index, reservoir.W_y, reservoir.M, 0.0));
 
-
-        vec3 directLighting = computeDirectLighting(pos, n, albedo, light_dir, LightIntensity, LightSource.LightColour.rgb) * reservoir.W_y * Visibility;
-        radiance += throughput * directLighting;
+        vec3 directLighting = albedo * Fx * LightSource.LightColour.rgb; //ComputeDiffuseBRDF(pos, n, albedo, light_dir, LightIntensity, LightSource.LightColour.rgb) * reservoir.W_y * Visibility;
+        radiance += throughput * directLighting * reservoir.W_y * Visibility;
     }
 
     return radiance;
@@ -331,7 +333,7 @@ vec3 NaiveDirectLighting(vec3 pos, vec3 n, vec3 albedo)
         intensity = 2000.0f * att;
 
         float visibility = CastShadowRay(pos, n, lightDir, length(light.LightPosition.xyz - pos) - 0.001);
-        vec3 directLighting = computeDirectLighting(pos, n, albedo, lightDir, intensity, LightColour.rgb) * visibility;
+        vec3 directLighting = ComputeDiffuseBRDF(pos, n, albedo, lightDir, intensity, LightColour.rgb) * visibility;
         radiance += throughput * directLighting;
     }
 
@@ -373,6 +375,8 @@ void main()
 
 	vec3 objectNormal = normalize(cross(v1 - v0, v2 - v0));
 	vec3 worldNormal = normalize(vec3(objectNormal * gl_WorldToObjectEXT).xyz);
+
+    imageStore(NormalImage, ivec2(gl_LaunchIDEXT.xy), vec4(worldNormal, 0.0));
 
     // Compute direct lighting at the first hit
     vec3 sunDirection = normalize(vec3(0.0f, 1.0f, 0.5)); //.5 for z // vec3(0.0, 1.0, 0.35)
