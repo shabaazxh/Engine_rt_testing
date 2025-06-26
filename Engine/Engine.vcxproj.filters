@@ -33,6 +33,9 @@
     <ClInclude Include="..\src\ForwardPass.hpp">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\GBuffer.hpp">
+      <Filter>src</Filter>
+    </ClInclude>
     <ClInclude Include="..\src\GLTF.hpp">
       <Filter>src</Filter>
     </ClInclude>
@@ -129,6 +132,9 @@
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="..\src\ForwardPass.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\GBuffer.cpp">
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="..\src\GLTF.cpp">

@@ -3,6 +3,7 @@
 #include <memory>
 #include "Image.hpp"
 #include <vector>
+#include "GBuffer.hpp"
 
 namespace vk
 {
@@ -12,7 +13,7 @@ namespace vk
 	class Temporal
 	{
 	public:
-		explicit Temporal(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initialCandidates, Image& MotionVectors, Image& HitNormals, Image& HitWorldPos);
+		explicit Temporal(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initialCandidates, Image& MotionVectors, const GBuffer::GBufferMRT& gbufferMRT);
 		~Temporal();
 
 		void Execute(VkCommandBuffer cmd);
@@ -30,12 +31,12 @@ namespace vk
 		Context& context;
 		std::shared_ptr<Scene> scene;
 		std::shared_ptr<Camera> camera;
+		const GBuffer::GBufferMRT& gbufferMRT;
 		Image m_RenderTarget;
 		Image m_PreviousImage;
 		Image& initialCandidates;
 		Image& MotionVectors;
-		Image& HitNormals;
-		Image& HitWorldPos;
+
 
 		VkPipeline m_Pipeline;
 		VkPipelineLayout m_PipelineLayout;

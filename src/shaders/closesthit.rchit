@@ -16,6 +16,12 @@ layout(set = 0, binding = 10, rgba32f) uniform image2D WorldPositionImage;
 layout(set = 0, binding = 12, rgba32f) uniform image2D ReservoirsImage;
 layout(set = 0, binding = 13, rgba32f) uniform image2D NormalImage;
 
+
+layout(set = 0, binding = 14) uniform sampler2D g_world_positions;
+layout(set = 0, binding = 15) uniform sampler2D g_world_normals;
+layout(set = 0, binding = 16) uniform sampler2D g_albedo;
+
+
 struct Res
 {
     int Y;
@@ -369,7 +375,7 @@ void main()
 	vec3 albedo = texture(textures[material.albedoIndex], interpolatedUV).rgb;
 
 	vec3 pos = v0 * barycentrics.x + v1 * barycentrics.y + v2 * barycentrics.z;
-	const vec3 worldPos = vec3(gl_ObjectToWorldEXT * vec4(pos, 1.0));
+	vec3 worldPos = vec3(gl_ObjectToWorldEXT * vec4(pos, 1.0));
 
     imageStore(WorldPositionImage, ivec2(gl_LaunchIDEXT.xy), vec4(worldPos, 0.0));
 
@@ -383,6 +389,10 @@ void main()
     float sunIntensity = 20.0;
     vec3 sunColor = vec3(1.0, 0.95, 0.9);
     float sunAngularSize = 0.8;
+
+    worldPos = texelFetch(g_world_positions, ivec2(gl_LaunchIDEXT.xy), 0).xyz;
+    worldNormal = normalize(texelFetch(g_world_normals, ivec2(gl_LaunchIDEXT.xy), 0).xyz * 2.0 - 1.0);
+    albedo = texelFetch(g_albedo, ivec2(gl_LaunchIDEXT.xy), 0).rgb;
 
     //vec3 indirectLight = computeIndirectLightingBEFORENEW(worldPos, worldNormal, albedo, sunIntensity);
     vec3 DirectLight = RISReservoirSampling(worldPos, worldNormal, albedo);

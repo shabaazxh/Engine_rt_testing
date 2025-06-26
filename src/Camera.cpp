@@ -15,7 +15,7 @@ vk::Camera::Camera(Context& context, const glm::vec3 position, glm::vec3 directi
 	m_increaseSpeed = 0.0f;
 	m_transform.viewportSize = glm::vec2(context.extent.width, context.extent.height);
 	m_transform.nearPlane = 0.1f;
-	m_transform.farPlane = 100.0f;
+	m_transform.farPlane = 3000.0f;
 	m_transform.fov = 45.0f;
 	m_cameraSpeed = defaultSpeed;
 

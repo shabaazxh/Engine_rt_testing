@@ -1,8 +1,10 @@
 #pragma once
 #include <volk/volk.h>
 #include <memory>
-#include "Image.hpp"
 #include <vector>
+
+#include "Image.hpp"
+#include "GBuffer.hpp"
 
 namespace vk
 {
@@ -12,7 +14,7 @@ namespace vk
 	class RayPass
 	{
 	public:
-		explicit RayPass(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera);
+		explicit RayPass(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, const GBuffer::GBufferMRT& gbufferMRT);
 		~RayPass();
 
 		void Execute(VkCommandBuffer cmd);
@@ -32,6 +34,7 @@ namespace vk
 		Context& context;
 		std::shared_ptr<Scene> scene;
 		std::shared_ptr<Camera> camera;
+		const GBuffer::GBufferMRT& gbufferMRT;
 		Image m_RenderTarget;
 		Image m_WorldPositionsTarget;
 		Image m_NormalsTarget;

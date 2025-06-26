@@ -77,8 +77,8 @@ layout(set = 0, binding = 9) uniform RTXSettings
 layout(set = 0, binding = 10) uniform sampler2D InitialCandidates;
 layout(set = 0, binding = 11) uniform sampler2D PreviousFrame;
 layout(set = 0, binding = 12) uniform sampler2D MotionVectors;
-layout(set = 0, binding = 13) uniform sampler2D HitNormals;
-layout(set = 0, binding = 14) uniform sampler2D HitWorldPos;
+layout(set = 0, binding = 13) uniform sampler2D g_world_positions;
+layout(set = 0, binding = 14) uniform sampler2D g_world_normals;
 
 
 struct RayPayLoad
@@ -207,7 +207,7 @@ void update(uint seed, inout Reservoir reservoir, in float xi_weight, int index,
 
 // All these initial candidates used a uniform distribution i.e 1 / NUM_LIGHTS
 
-Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed, vec3 n, vec3 pos, vec3 albedo, inout vec3 previous_pixel_normal, inout vec3 previous_pixel_position, inout int previous_pixel_reservoir_m)
+Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed, vec3 n, vec3 pos, inout vec3 previous_pixel_normal, inout vec3 previous_pixel_position, inout int previous_pixel_reservoir_m)
 {
     // Init a reservoir with the current pixel reservoir data
     Reservoir reservoir;;
@@ -234,8 +234,8 @@ Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed,
     previous_pixel = clamp(previous_pixel, ivec2(0), ivec2(ubo.viewportSize - vec2(1)));
 
     // get the normal of the previous pixel
-    previous_pixel_normal = texelFetch(HitNormals, previous_pixel, 0).xyz;
-    previous_pixel_position = texelFetch(HitWorldPos, previous_pixel, 0).xyz;
+    previous_pixel_normal = (texelFetch(g_world_normals, previous_pixel, 0).xyz * 2.0 - 1.0);
+    previous_pixel_position = texelFetch(g_world_positions, previous_pixel, 0).xyz;
 
     reservoirs[0].index = int(current_pixel_reservoir_data.x);
     reservoirs[0].W_y = current_pixel_reservoir_data.y;
@@ -267,7 +267,7 @@ Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed,
 }
 
 
-vec4 Temporal(vec3 n, vec3 pos, vec3 albedo)
+vec4 Temporal(vec3 n, vec3 pos)
 {
     uint seed = uint(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x) + gl_LaunchIDEXT.x;
     seed *= rtx.frameIndex;
@@ -278,7 +278,7 @@ vec4 Temporal(vec3 n, vec3 pos, vec3 albedo)
     vec3 previous_pixel_normal = vec3(0);
     vec3 previous_pixel_position = vec3(0);
     int previous_pixel_reservoir_m = -1;
-    Reservoir reservoir = combine_reservoirs(pixelReservoir, seed, n, pos, albedo, previous_pixel_normal, previous_pixel_position, previous_pixel_reservoir_m);
+    Reservoir reservoir = combine_reservoirs(pixelReservoir, seed, n, pos, previous_pixel_normal, previous_pixel_position, previous_pixel_reservoir_m);
 
     // The reservoir should now contain the new updated sample
     // Use the index from the reservoir to fetch the light data
@@ -360,10 +360,13 @@ void main()
 	vec3 albedo = texture(textures[material.albedoIndex], interpolatedUV).rgb;
 
 	vec3 pos = v0 * barycentrics.x + v1 * barycentrics.y + v2 * barycentrics.z;
-	const vec3 worldPos = vec3(gl_ObjectToWorldEXT * vec4(pos, 1.0));
+	vec3 worldPos = vec3(gl_ObjectToWorldEXT * vec4(pos, 1.0));
 
 	vec3 objectNormal = normalize(cross(v1 - v0, v2 - v0));
 	vec3 worldNormal = normalize(vec3(objectNormal * gl_WorldToObjectEXT).xyz);
+
+    worldPos = texelFetch(g_world_positions, ivec2(gl_LaunchIDEXT.xy), 0).xyz;
+    worldNormal = (texelFetch(g_world_normals, ivec2(gl_LaunchIDEXT.xy), 0).xyz * 2.0 - 1.0);
 
     //vec3 indirectLight = computeIndirectLightingBEFORENEW(worldPos, worldNormal, albedo, sunIntensity);
     // vec3 DirectLight = RISReservoirSampling(worldPos, worldNormal, albedo);
@@ -376,5 +379,5 @@ void main()
 //        rayPayLoad.colour = vec3(Temporal(worldNormal, worldPos, albedo));
 //    }
 
-    rayPayLoad.colour = vec4(Temporal(worldNormal, worldPos, albedo));
+    rayPayLoad.colour = vec4(Temporal(worldNormal, worldPos));
 }

@@ -3,6 +3,7 @@
 #include <memory>
 #include "Image.hpp"
 #include <vector>
+#include "GBuffer.hpp"
 
 namespace vk
 {
@@ -12,7 +13,7 @@ namespace vk
 	class Spatial
 	{
 	public:
-		explicit Spatial(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initialCandidates, Image& TemporalReuseReservoirs, Image& HitNormals, Image& HitWorldPos);
+		explicit Spatial(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initialCandidates, Image& TemporalReuseReservoirs, const GBuffer::GBufferMRT& gbufferMRT);
 		~Spatial();
 
 		void Execute(VkCommandBuffer cmd);
@@ -29,12 +30,11 @@ namespace vk
 		Context& context;
 		std::shared_ptr<Scene> scene;
 		std::shared_ptr<Camera> camera;
+		const GBuffer::GBufferMRT& gbufferMRT;
 		Image m_RenderTarget;
 		Image m_SpatialReuseReservoirs;
 		Image& initialCandidates;
 		Image& TemporalReuseReservoirs;
-		Image& HitNormals;
-		Image& HitWorldPos;
 
 		VkPipeline m_Pipeline;
 		VkPipelineLayout m_PipelineLayout;

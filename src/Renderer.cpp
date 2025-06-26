@@ -115,18 +115,20 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	// m_DepthPrepass      = std::make_unique<DepthPrepass>(context, m_scene, m_camera);
 	// m_ForwardPass   = std::make_unique<ForwardPass>(context, m_ShadowMap->GetRenderTarget(), m_DepthPrepass->GetRenderTarget(), m_scene, m_camera);
 
-	// Create the initial candidates using RIS
-	m_RayPass		    = std::make_unique<RayPass>(context, m_scene, m_camera);
+	m_GBuffer = std::make_unique<GBuffer>(context, m_scene, m_camera);
 
-	m_MotionVectorsPass = std::make_unique<MotionVectors>(context, m_camera, m_RayPass->GetWorldHitPositions());
+	// Create the initial candidates using RIS
+	m_RayPass		    = std::make_unique<RayPass>(context, m_scene, m_camera, m_GBuffer->GetGBufferMRT());
+
+	m_MotionVectorsPass = std::make_unique<MotionVectors>(context, m_camera, m_GBuffer->GetGBufferMRT().Depth);
 
 	// For now, we should store the output from the temporal pass as "previous frame" and this should hopefully work
 	// Once that works, we can extend it and make previous frame be the output from the spatial pass
 	// We will begin with the temporal pass for testing to ensure temporal works
-	m_TemporalPass		= std::make_unique<Temporal>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates(), m_MotionVectorsPass->GetRenderTarget(), m_RayPass->GetHitNormals(), m_RayPass->GetWorldHitPositions());
+	m_TemporalPass		= std::make_unique<Temporal>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates(), m_MotionVectorsPass->GetRenderTarget(), m_GBuffer->GetGBufferMRT());
 
 	// Spatial pass will take in the temporal resampled reservoir results and spatially reuse to resample
-	m_SpatialPass		= std::make_unique<Spatial>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates(), m_TemporalPass->GetRenderTarget(), m_RayPass->GetHitNormals(), m_RayPass->GetWorldHitPositions());
+	m_SpatialPass		= std::make_unique<Spatial>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates(), m_TemporalPass->GetRenderTarget(), m_GBuffer->GetGBufferMRT());
 
 	// History pass goes first to temporally reuse past frame reservoirs
 	m_HistoryPass = std::make_unique<History>(context, m_RayPass->GetRenderTarget());
@@ -136,7 +138,7 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	m_CompositePass		= std::make_unique<Composite>(context, m_RayPass->GetRenderTarget(), m_HistoryPass->GetRenderTarget());
 
 	// Currently passing the spatial pass result to the composite to display, switch to RayPass to show initial candidates
-	m_PresentPass		= std::make_unique<PresentPass>(context, m_CompositePass->GetRenderTarget(), m_SpatialPass->GetRenderTarget());
+	m_PresentPass		= std::make_unique<PresentPass>(context, m_GBuffer->GetGBufferMRT().Albedo, m_SpatialPass->GetRenderTarget());
 
 
 	// @NOTE: The final reservoirs from spatial reuse are the ones which should be copied to temporal pass "previous frame"
@@ -149,7 +151,7 @@ void vk::Renderer::Destroy()
 	vkDeviceWaitIdle(context.device);
 
 	ImGuiRenderer::Shutdown(context);
-	m_DepthPrepass.reset();
+	m_GBuffer.reset();
 	m_MotionVectorsPass.reset();
 	m_TemporalPass.reset();
 	m_ForwardPass.reset();
@@ -315,7 +317,7 @@ void vk::Renderer::Render(double deltaTime)
 		VK_CHECK(vkBeginCommandBuffer(cmd, &beginInfo), "Failed to begin command buffer");
 
 
-		// m_DepthPrepass->Execute(cmd);
+		m_GBuffer->Execute(cmd);
 		m_RayPass->Execute(cmd);
 		m_MotionVectorsPass->Execute(cmd);
 		m_TemporalPass->Execute(cmd);

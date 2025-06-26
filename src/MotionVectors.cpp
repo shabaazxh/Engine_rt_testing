@@ -182,7 +182,7 @@ void vk::MotionVectors::CreateDescriptors()
 		VkDescriptorImageInfo imgInfo = {
 			.sampler = clampToEdgeSamplerAniso,
 			.imageView = WorldHitPositions.imageView,
-			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
 		};
 
 		UpdateDescriptorSet(context, 0, imgInfo, m_DescriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);

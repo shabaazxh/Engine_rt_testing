@@ -15,14 +15,13 @@ namespace
 	}
 }
 
-vk::Temporal::Temporal(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initialCandidates, Image& MotionVectors, Image& HitNormals, Image& HitWorldPos) :
+vk::Temporal::Temporal(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initialCandidates, Image& MotionVectors, const GBuffer::GBufferMRT& gbufferMRT) :
 	context{ context },
 	scene{ scene },
 	camera{ camera },
+	gbufferMRT{ gbufferMRT },
 	initialCandidates{ initialCandidates },
 	MotionVectors{ MotionVectors },
-	HitNormals{ HitNormals },
-	HitWorldPos{ HitWorldPos },
 	m_Pipeline{ VK_NULL_HANDLE },
 	m_PipelineLayout{ VK_NULL_HANDLE },
 	m_descriptorSetLayout{ VK_NULL_HANDLE },
@@ -583,7 +582,7 @@ void vk::Temporal::BuildDescriptors()
 		VkDescriptorImageInfo imageInfo = {
 
 			.sampler = clampToEdgeSamplerAniso,
-			.imageView = HitNormals.imageView,
+			.imageView = gbufferMRT.WorldPositions.imageView,
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		};
 
@@ -595,7 +594,7 @@ void vk::Temporal::BuildDescriptors()
 		VkDescriptorImageInfo imageInfo = {
 
 			.sampler = clampToEdgeSamplerAniso,
-			.imageView = HitWorldPos.imageView,
+			.imageView = gbufferMRT.Normal.imageView,
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		};
 

@@ -77,8 +77,11 @@ layout(set = 0, binding = 9) uniform RTXSettings
 layout(set = 0, binding = 10) uniform sampler2D InitialCandidatesImage;
 layout(set = 0, binding = 11, rgba32f) uniform image2D SpatialReservoirStore;
 layout(set = 0, binding = 12) uniform sampler2D TemporalReuseReservoirs;
-layout(set = 0, binding = 13) uniform sampler2D HitNormals;
-layout(set = 0, binding = 14) uniform sampler2D HitWorldPos;
+
+layout(set = 0, binding = 13) uniform sampler2D g_world_positions;
+layout(set = 0, binding = 14) uniform sampler2D g_world_normals;
+layout(set = 0, binding = 15) uniform sampler2D g_albedo;
+
 
 struct RayPayLoad
 {
@@ -369,8 +372,8 @@ Reservoir combine_reservoirs_spatial_reuse(vec4 current_pixel_reservoir_data, in
         neighbouring_reservoirs[i].index = int(texelFetch(TemporalReuseReservoirs, sample_pixel, 0).x);
         neighbouring_reservoirs[i].W_y   = texelFetch(TemporalReuseReservoirs, sample_pixel, 0).y;
         neighbouring_reservoirs[i].M     = min(int(texelFetch(TemporalReuseReservoirs, sample_pixel, 0).z), rtx.M); // 20 * int(current_pixel_reservoir_data.z)
-        neighbouring_normals[i] = texelFetch(HitNormals, sample_pixel, 0).xyz;
-        neightbouring_position[i] = texelFetch(HitWorldPos, sample_pixel, 0).xyz;
+        neighbouring_normals[i] = (texelFetch(g_world_normals, sample_pixel, 0).xyz * 2.0 - 1.0);
+        neightbouring_position[i] = texelFetch(g_world_positions, sample_pixel, 0).xyz;
     }
 
     // Update the reservoir using the neighbouring reservoirs
@@ -440,7 +443,7 @@ vec4 Spatial(vec3 n, vec3 pos, vec3 albedo)
     float Fx = max(dot(n, LightDir), 0.0) * LightIntensity; //length(ComputeDiffuseBRDF(pos, n, albedo, LightDir, intensity, L.LightColour.rgb)); // Simplied F(x) only doing diffuse
 
     float Visibility = CastShadowRay(pos, n, LightDir, dist);
-    //Fx = Fx * Visibility;
+    Fx = Fx * Visibility;
 
     if(rtx.bounces == 3) {
         reservoir.W_y = Fx > 0.0 ? (1.0 / Fx) * (m * reservoir.totalWeights) : 0.0;
@@ -488,10 +491,14 @@ void main()
 	vec3 albedo = texture(textures[material.albedoIndex], interpolatedUV).rgb;
 
 	vec3 pos = v0 * barycentrics.x + v1 * barycentrics.y + v2 * barycentrics.z;
-	const vec3 worldPos = vec3(gl_ObjectToWorldEXT * vec4(pos, 1.0));
+	vec3 worldPos = vec3(gl_ObjectToWorldEXT * vec4(pos, 1.0));
 
 	vec3 objectNormal = normalize(cross(v1 - v0, v2 - v0));
 	vec3 worldNormal = normalize(vec3(objectNormal * gl_WorldToObjectEXT).xyz);
+
+    worldPos = texelFetch(g_world_positions, ivec2(gl_LaunchIDEXT.xy), 0).xyz;
+    worldNormal = (texelFetch(g_world_normals, ivec2(gl_LaunchIDEXT.xy), 0).xyz * 2.0 - 1.0);
+    albedo = texelFetch(g_albedo, ivec2(gl_LaunchIDEXT.xy), 0).rgb;
 
     //vec3 indirectLight = computeIndirectLightingBEFORENEW(worldPos, worldNormal, albedo, sunIntensity);
     // vec3 DirectLight = RISReservoirSampling(worldPos, worldNormal, albedo);
