@@ -305,7 +305,7 @@ vec3 RISReservoirSampling(vec3 pos, vec3 n, vec3 albedo)
         imageStore(ReservoirsImage, ivec2(gl_LaunchIDEXT.xy), vec4(reservoir.index, reservoir.W_y, reservoir.M, 0.0));
 
         vec3 directLighting = albedo * Fx * LightSource.LightColour.rgb; //ComputeDiffuseBRDF(pos, n, albedo, light_dir, LightIntensity, LightSource.LightColour.rgb) * reservoir.W_y * Visibility;
-        radiance += throughput * directLighting * reservoir.W_y * Visibility;
+        radiance += throughput * directLighting * reservoir.W_y * Visibility; // TODO: shouldn't be multiplying by visibility here again
     }
 
     return radiance;

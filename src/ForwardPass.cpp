@@ -7,6 +7,8 @@
 #include "RenderPass.hpp"
 #include "Camera.hpp"
 
+// This is the full RT one
+
 vk::ForwardPass::ForwardPass(Context& context, Image& shadowMap, Image& depthPrepass, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera) :
 	context{ context },
 	shadowMap{ shadowMap },
