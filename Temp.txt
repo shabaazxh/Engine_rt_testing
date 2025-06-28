@@ -2,4 +2,37 @@
 and then use this to compute motion vectors for the temporal pass 
 
 
-Each pixel q will have its own unique f_q and corresponding PDF p^q
+Each pixel q will have its own unique f_q and corresponding PDF p^q//    for(uint i = 1; i < NUM_SPATIAL_NEIGHBOURS; i++)
+//    {
+//    vec2 offset = 2.0 * GetRandomHashValue01(seed) - 1.0;
+//
+//    float radius = rtx.numPastFrames;
+//    ivec2 sample_pixel = current_pixel + int(offset * radius);
+//
+//    ivec2 viewportSizeInt = ivec2(ubo.viewportSize);
+//    sample_pixel = clamp(sample_pixel, ivec2(0), viewportSizeInt - ivec2(1));
+//
+//        neighbouring_reservoirs[i].index = int(texelFetch(TemporalReuseReservoirs, sample_pixel, 0).x);
+//        neighbouring_reservoirs[i].W_y   = texelFetch(TemporalReuseReservoirs, sample_pixel, 0).y;
+//        neighbouring_reservoirs[i].M     = (int(texelFetch(TemporalReuseReservoirs, sample_pixel, 0).z), 20 * int(current_pixel_reservoir_data.z));
+//    }
+
+
+
+output naïve direct lighting and see what it looks like vs restir 
+
+
+the current reservoir at the pixel stores the best sample for the current pixel to reduce variance which in turn,
+reduces noise. When combining reservoirs, if another reservoir has a higher weight, it should replace the current one. 
+Higher weight means it has a sample which is better which will reduce variance and thus noise. This works well because 
+each reservoir is build up of randomly selected light sources and by the time we're finished resampling both temporally
+and spatially, we would have arrived at a reservoir holding a sample (light index) which is best for the current pixel. This
+will significantly reduce noise across the image and is much better than doing basic Resampled Importance Sampling which randomly samples many light sources per pixel, picking the best one for the current pixel in the current frame and then
+re-doing this work in the next frame which keeps a lot of noise in the final image. 
+
+
+Hey, hope you're doing well. Sorry to bother you. Would it be ok for me to ask a question about the unbiased algorithm 6?
+
+
+Thanks! To compute `m = 1 / Z` I need to compute the target function for eac pixel used to built the current reservoir. My target function is a simple `N * L * LightIntensity` so for spatial reuse, for each neighbour, I store its normal. 
+I then compute the target function for each neighbour `(N * L * LightIntensity)` using the normal at that pixel. For the temporal pass, we resample using a new reservoir produced from initial candidates stage and previous pixel. I store the previous pixels normal and compute the target function. I also do this for the current pixel. 

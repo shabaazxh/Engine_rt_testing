@@ -8,10 +8,10 @@
 #include "ImGuiRenderer.hpp"
 
 
-vk::PresentPass::PresentPass(Context& context, Image& renderedScene, const Image& nonTemporalRenderedScene) :
+vk::PresentPass::PresentPass(Context& context, Image& raypass_result, Image& composited_result) :
 	context{ context },
-	renderedScene{ renderedScene },
-	nonTemporalRenderedScene{nonTemporalRenderedScene},
+	composited_result{ composited_result },
+	raypass_result{ raypass_result },
 	m_pipeline { VK_NULL_HANDLE},
 	m_pipelineLayout{ VK_NULL_HANDLE },
 	m_renderType {renderType}
@@ -46,7 +46,7 @@ void vk::PresentPass::Resize()
 	{
 		VkDescriptorImageInfo imgInfo = {
 			.sampler = repeatSampler,
-			.imageView = renderedScene.imageView,
+			.imageView = composited_result.imageView,
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		};
 
@@ -57,7 +57,7 @@ void vk::PresentPass::Resize()
 	{
 		VkDescriptorImageInfo imgInfo = {
 			.sampler = repeatSampler,
-			.imageView = nonTemporalRenderedScene.imageView,
+			.imageView = raypass_result.imageView,
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		};
 
@@ -164,29 +164,26 @@ void vk::PresentPass::BuildDescriptors()
 		UpdateDescriptorSet(context, 0, bufferInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 	}
 
-
 	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
 	{
 		VkDescriptorImageInfo imgInfo = {
 			.sampler = repeatSampler,
-			.imageView = renderedScene.imageView,
-			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL // VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			.imageView = composited_result.imageView,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		};
 
 		UpdateDescriptorSet(context, 1, imgInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 	}
 
-
 	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
 	{
 		VkDescriptorImageInfo imgInfo = {
 			.sampler = repeatSampler,
-			.imageView = nonTemporalRenderedScene.imageView,
+			.imageView = raypass_result.imageView,
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		};
 
 		UpdateDescriptorSet(context, 2, imgInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 	}
-
 }
 

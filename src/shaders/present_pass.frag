@@ -9,8 +9,8 @@ layout(set = 0, binding = 0) uniform PostProcessSettings
 	bool Enable;
 }ppSettings;
 
-layout(set = 0, binding = 1) uniform sampler2D renderedScene;
-layout(set = 0, binding = 2) uniform sampler2D nonTemporalScene;
+layout(set = 0, binding = 1) uniform sampler2D composited_result;
+layout(set = 0, binding = 2) uniform sampler2D raypass_result;
 
 // Reference: Implementation and Learnings based on:
 // https://www.geeks3d.com/20101029/shader-library-pixelation-post-processing-effect-glsl/
@@ -46,11 +46,18 @@ void main()
 //		fragColor = vec4(gammaCorrectedColor, 1.0);
 //	}
 
-
-	vec3 scene = texture(nonTemporalScene, uv).rgb;
-	vec3 ldrColor = scene.rgb / (scene.rgb + vec3(1.0));
-	vec3 gammaCorrectedColor = pow(ldrColor, vec3(1.0 / 2.2));
-	fragColor = vec4(gammaCorrectedColor, 1.0);
+	if(ppSettings.Enable)
+	{
+		// Return the reuse image
+		vec3 scene = texture(composited_result, uv).rgb;
+		fragColor = vec4(scene, 1.0);
+	} else
+	{
+		vec3 scene = texture(raypass_result, uv).rgb;
+		vec3 ldrColor = scene.rgb / (scene.rgb + vec3(1.0));
+		vec3 gammaCorrectedColor = pow(ldrColor, vec3(1.0 / 2.2));
+		fragColor = vec4(gammaCorrectedColor, 1.0);
+	}
 
 }
 

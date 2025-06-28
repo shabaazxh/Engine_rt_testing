@@ -51,147 +51,147 @@
     <CustomBuild Include="..\..\src\shaders\MotionVectors.frag">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
-"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
       <Outputs>../../assets/shaders/MotionVectors.frag.spv</Outputs>
       <Message>GLSLC: [FRAG] '%(Filename)%(Extension)'</Message>
     </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\Spatial.rchit">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
-"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
       <Outputs>../../assets/shaders/Spatial.rchit.spv</Outputs>
       <Message>GLSLC: [RCHIT] '%(Filename)%(Extension)'</Message>
     </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\SpatialCompute.comp">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
-"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
       <Outputs>../../assets/shaders/SpatialCompute.comp.spv</Outputs>
       <Message>GLSLC: [COMP] '%(Filename)%(Extension)'</Message>
     </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\Temporal.rchit">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
-"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
       <Outputs>../../assets/shaders/Temporal.rchit.spv</Outputs>
       <Message>GLSLC: [RCHIT] '%(Filename)%(Extension)'</Message>
     </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\TemporalCompute.comp">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
-"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
       <Outputs>../../assets/shaders/TemporalCompute.comp.spv</Outputs>
       <Message>GLSLC: [COMP] '%(Filename)%(Extension)'</Message>
     </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\alpha_masking.frag">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
-"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
       <Outputs>../../assets/shaders/alpha_masking.frag.spv</Outputs>
       <Message>GLSLC: [FRAG] '%(Filename)%(Extension)'</Message>
     </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\closesthit.rchit">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
-"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
       <Outputs>../../assets/shaders/closesthit.rchit.spv</Outputs>
       <Message>GLSLC: [RCHIT] '%(Filename)%(Extension)'</Message>
     </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\composite.frag">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
-"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
       <Outputs>../../assets/shaders/composite.frag.spv</Outputs>
       <Message>GLSLC: [FRAG] '%(Filename)%(Extension)'</Message>
     </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\default.frag">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
-"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
       <Outputs>../../assets/shaders/default.frag.spv</Outputs>
       <Message>GLSLC: [FRAG] '%(Filename)%(Extension)'</Message>
     </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\default.vert">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
-"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
       <Outputs>../../assets/shaders/default.vert.spv</Outputs>
       <Message>GLSLC: [VERT] '%(Filename)%(Extension)'</Message>
     </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\diffusehit.rchit">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
-"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
       <Outputs>../../assets/shaders/diffusehit.rchit.spv</Outputs>
       <Message>GLSLC: [RCHIT] '%(Filename)%(Extension)'</Message>
     </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\fs_tri.vert">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
-"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
       <Outputs>../../assets/shaders/fs_tri.vert.spv</Outputs>
       <Message>GLSLC: [VERT] '%(Filename)%(Extension)'</Message>
     </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\history.frag">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
-"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
       <Outputs>../../assets/shaders/history.frag.spv</Outputs>
       <Message>GLSLC: [FRAG] '%(Filename)%(Extension)'</Message>
     </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\history_compute.comp">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
-"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
       <Outputs>../../assets/shaders/history_compute.comp.spv</Outputs>
       <Message>GLSLC: [COMP] '%(Filename)%(Extension)'</Message>
     </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\miss.rmiss">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
-"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
       <Outputs>../../assets/shaders/miss.rmiss.spv</Outputs>
       <Message>GLSLC: [RMISS] '%(Filename)%(Extension)'</Message>
     </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\present_pass.frag">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
-"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
       <Outputs>../../assets/shaders/present_pass.frag.spv</Outputs>
       <Message>GLSLC: [FRAG] '%(Filename)%(Extension)'</Message>
     </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\raygen.rgen">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
-"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
       <Outputs>../../assets/shaders/raygen.rgen.spv</Outputs>
       <Message>GLSLC: [RGEN] '%(Filename)%(Extension)'</Message>
     </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\shadow_map.frag">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
-"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
       <Outputs>../../assets/shaders/shadow_map.frag.spv</Outputs>
       <Message>GLSLC: [FRAG] '%(Filename)%(Extension)'</Message>
     </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\shadow_map.vert">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
-"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
       <Outputs>../../assets/shaders/shadow_map.vert.spv</Outputs>
       <Message>GLSLC: [VERT] '%(Filename)%(Extension)'</Message>
     </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\shadowhit.rchit">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
-"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
       <Outputs>../../assets/shaders/shadowhit.rchit.spv</Outputs>
       <Message>GLSLC: [RCHIT] '%(Filename)%(Extension)'</Message>
     </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\shadowmiss.rmiss">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
-"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
       <Outputs>../../assets/shaders/shadowmiss.rmiss.spv</Outputs>
       <Message>GLSLC: [RMISS] '%(Filename)%(Extension)'</Message>
     </CustomBuild>

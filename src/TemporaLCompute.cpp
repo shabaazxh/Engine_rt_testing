@@ -26,10 +26,9 @@ vk::TemporalCompute::TemporalCompute(Context& context, std::shared_ptr<Scene>& s
 	m_width = context.extent.width;
 	m_height = context.extent.height;
 
-
 	m_uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 	for(auto& buffer : m_uniformBuffers)
-		buffer = CreateBuffer("TemporalComputeUBO", context, sizeof(ReusePass), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+		buffer = CreateBuffer("TemporalComputeUBO", context, sizeof(uTemporalPass), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
 	m_RenderTarget = CreateImageTexture2D(
 		"TemporalComputeRT",
@@ -225,9 +224,10 @@ void vk::TemporalCompute::Execute(VkCommandBuffer cmd)
 
 void vk::TemporalCompute::Update()
 {
-	reuse_pass_uniform_data.frameIndex = frameNumber;
-	reuse_pass_uniform_data.viewportSize = { m_width, m_height };
-	m_uniformBuffers[currentFrame].WriteToBuffer(&reuse_pass_uniform_data, sizeof(ReusePass));
+	TemporalPassData.frameIndex = frameNumber;
+	TemporalPassData.viewportSize = { m_width, m_height };
+	TemporalPassData.M = TemporalPassData.M;
+	m_uniformBuffers[currentFrame].WriteToBuffer(&TemporalPassData, sizeof(uTemporalPass));
 }
 
 void vk::TemporalCompute::CreatePipeline()
@@ -254,7 +254,8 @@ void vk::TemporalCompute::BuildDescriptors()
 			CreateDescriptorBinding(4, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT), // Normal
 			CreateDescriptorBinding(5, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT), // Motion vectors
 			CreateDescriptorBinding(6, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT), // Previous frame
-			CreateDescriptorBinding(7, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Output
+			CreateDescriptorBinding(7, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT), // Output
+			CreateDescriptorBinding(8, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_COMPUTE_BIT),
 		};
 
 		m_descriptorSetLayout = CreateDescriptorSetLayout(context, bindings);
@@ -266,7 +267,7 @@ void vk::TemporalCompute::BuildDescriptors()
 		VkDescriptorBufferInfo buffer_info = {
 			.buffer = m_uniformBuffers[i].buffer,
 			.offset = 0,
-			.range = sizeof(ReusePass)
+			.range = sizeof(uTemporalPass)
 		};
 		UpdateDescriptorSet(context, 0, buffer_info, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 	}
@@ -352,4 +353,8 @@ void vk::TemporalCompute::BuildDescriptors()
 		UpdateDescriptorSet(context, 7, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	}
 
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		UpdateDescriptorSet(context, 8, scene->TopLevelAccelerationStructure.handle, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR);
+	}
 }

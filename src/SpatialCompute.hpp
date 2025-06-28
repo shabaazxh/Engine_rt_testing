@@ -13,7 +13,7 @@ namespace vk
 	class SpatialCompute
 	{
 	public:
-		explicit SpatialCompute(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initial_candidates, Image& hit_world_positions, Image& hit_normals, Image& temporal_pass_reservoirs);
+		explicit SpatialCompute(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initial_candidates, Image& hit_world_positions, Image& hit_normals, Image& hit_albedo, Image& temporal_pass_reservoirs);
 		~SpatialCompute();
 
 		void Execute(VkCommandBuffer cmd);
@@ -24,7 +24,6 @@ namespace vk
 		Image& GetShadingResult() { return m_TemporaryShadingResult; }
 	private:
 		void CreatePipeline();
-		void CreateShaderBindingTable();
 		void BuildDescriptors();
 
 		Context& context;
@@ -37,6 +36,7 @@ namespace vk
 		Image& temporal_pass_reservoirs;
 		Image& hit_world_positions;
 		Image& hit_normals;
+		Image& hit_albedo;
 
 		VkPipeline m_Pipeline;
 		VkPipelineLayout m_PipelineLayout;

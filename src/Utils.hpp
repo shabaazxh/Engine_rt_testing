@@ -17,7 +17,7 @@ class Context;
 
 #define ERROR(message) std::cout << "[ERROR]: " << message << std::endl; \
 
-constexpr int NUM_LIGHTS = 51;
+constexpr int NUM_LIGHTS = 100;
 
 namespace vk
 {
@@ -98,15 +98,31 @@ namespace vk
 		glm::vec2 viewportSize;
 	};
 
+	struct uTemporalPass
+	{
+		alignas(4) int frameIndex;
+		alignas(8) glm::vec2 viewportSize;
+		alignas(4) int M;
+	};
+
+	struct uSpatialPass
+	{
+		alignas(4) int frameIndex;
+		alignas(8) glm::vec2 viewportSize;
+		alignas(4) int M;
+		alignas(4) int radius;
+	};
+
 	inline PostProcessing postProcessSettings = {};
 	inline double deltaTime;
 	inline uint32_t setRenderingPipeline = 1;
 	inline uint32_t setAlphaMakingPipeline = 2;
 	inline RTX rtxSettings = { 1, 0, 2 };
-	inline ReusePass reuse_pass_uniform_data = {};
 	inline VkDescriptorSetLayout materialDescriptorSetLayout;
 	inline uint32_t frameNumber = 0;
 	inline bool isAccumulating = false;
+	inline uTemporalPass TemporalPassData = { 0, { 1280, 720 }, 20 };
+	inline uSpatialPass SpatialPassData = { 0, { 1280, 720 }, 20, 1 };
 }
 
 namespace vk

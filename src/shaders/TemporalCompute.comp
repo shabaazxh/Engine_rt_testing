@@ -1,7 +1,11 @@
-#version 450
+#version 460
+
+#extension GL_EXT_ray_query : enable
+#extension GL_EXT_ray_tracing : enable
+
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
-const int NUM_LIGHTS = 51;
+const int NUM_LIGHTS = 100;
 
 struct Light
 {
@@ -11,11 +15,12 @@ struct Light
 	mat4 LightSpaceMatrix;
 };
 
-layout(set = 0, binding = 0) uniform Uniforms
+layout(set = 0, binding = 0) uniform TemporalPassUniforms
 {
     int frameIndex;
     vec2 viewportSize;
-} ubo;
+    int M;
+} temp_ubo;
 
 
 layout(set = 0, binding = 1) uniform LightBuffer {
@@ -27,8 +32,9 @@ layout(set = 0, binding = 3) uniform sampler2D hit_world_position_texture;
 layout(set = 0, binding = 4) uniform sampler2D hit_normals_texture;
 layout(set = 0, binding = 5) uniform sampler2D motion_vectors_texture;
 layout(set = 0, binding = 6) uniform sampler2D previous_frame_texture;
-
 layout(set = 0, binding = 7, rgba32f) uniform image2D reservoir_output_image;
+layout(set = 0, binding = 8) uniform accelerationStructureEXT topLevelAS;
+
 
 // Reference: https://github.com/NVIDIAGameWorks/RTXGI-DDGI/blob/main/samples/test-harness/shaders/include/Random.hlsl#L42
 uint WangHash(uint seed)
@@ -71,6 +77,26 @@ vec2 GetRandomHashValue(inout uint seed)
     return vec2(u, v);
 }
 
+
+float inShadow(vec3 position, vec3 normal, float distToLight, vec3 lightDir)
+{
+    rayQueryEXT rq;
+    rayQueryInitializeEXT(rq, topLevelAS,
+                          gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT,
+                          0xFF,
+                          position + normal * 0.001, // offset to avoid self-intersection
+                          0.0,
+                          lightDir,
+                          distToLight);
+
+    while (rayQueryProceedEXT(rq)) {
+        // Just keep iterating until first hit or end
+    }
+    bool occluded = rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionNoneEXT;
+
+    return occluded ? 0.0 : 1.0;
+}
+
 struct Reservoir
 {
     int index;
@@ -79,11 +105,11 @@ struct Reservoir
     int M;
 };
 
-void update(uint seed, inout Reservoir reservoir, in float xi_weight, int index, int previousM, int currentPixelReservoirM)
+void update(uint seed, inout Reservoir reservoir, in float xi_weight, int index, int in_reservoir_m)
 {
     reservoir.totalWeights = reservoir.totalWeights + xi_weight;
     float r = GetRandomNumber(seed);
-    reservoir.M += min(previousM, 20 * currentPixelReservoirM); // Paper at the end suggests clamping M for temporal reuse
+    reservoir.M += in_reservoir_m;
     if(r < (xi_weight / reservoir.totalWeights))
     {
         reservoir.index = index;
@@ -125,7 +151,8 @@ Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed,
 
     // Get the previous frame pixel position by subtracting the motion vector from the current pixel position
     ivec2 current_pixel = ivec2(gl_GlobalInvocationID.xy);
-    ivec2 previous_pixel = ivec2(current_pixel - (motion_vector * ubo.viewportSize)); // motion_vector is difference between UV, we need it in pixels so multiply by viewportsize
+    ivec2 previous_pixel = ivec2(current_pixel - (motion_vector * temp_ubo.viewportSize)); // motion_vector is difference between UV, we need it in pixels so multiply by viewportsize
+    previous_pixel = clamp(previous_pixel, ivec2(0), ivec2(temp_ubo.viewportSize - vec2(1)));
 
     reservoirs[0].index = int(current_pixel_reservoir_data.x);
     reservoirs[0].W_y = current_pixel_reservoir_data.y;
@@ -133,26 +160,23 @@ Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed,
 
     reservoirs[1].index = int(texelFetch(previous_frame_texture, previous_pixel, 0).x);
     reservoirs[1].W_y   = texelFetch(previous_frame_texture, previous_pixel, 0).y;
-    reservoirs[1].M = int(texelFetch(previous_frame_texture, previous_pixel, 0).z);
-
-    const float uniform_PDF_weight = 1.0 / float(NUM_LIGHTS);
-    // Index into the light array to get the light data
+    reservoirs[1].M = min(int(texelFetch(previous_frame_texture, previous_pixel, 0).z), temp_ubo.M); // // Paper at the end suggests clamping M for temporal reuse
 
     for(int i = 0; i < 2; i++) {
         Light L = lightData.lights[reservoirs[i].index];
 
         float dist = length(L.LightPosition.xyz - pos);
         const vec3 LightDir = normalize(L.LightPosition.xyz - pos);
-        const float LightIntensity = 100.0f * (1.0 / (dist * dist));
+        const float LightIntensity = 1000.0f * (1.0 / (dist * dist));
 
         // Evaluate F(x) at the current pixel
-        float F_x = max(dot(n, LightDir), 0.001) * LightIntensity; // Simplied F(x) only doing diffuse
+        float F_x = max(dot(n, LightDir), 0.0) * LightIntensity; // Simplied F(x) only doing diffuse
 
         // Algorithm 4: Line: 4: p^q(r.y) * r.W * r.M
         float w_i = F_x * reservoirs[i].W_y * reservoirs[i].M;
 
         // Update the reservoir using current sample data
-        update(seed, reservoir, w_i, reservoirs[i].index, reservoirs[i].M, int(current_pixel_reservoir_data.z));
+        update(seed, reservoir, w_i, reservoirs[i].index, reservoirs[i].M);
     }
 
     return reservoir;
@@ -161,10 +185,10 @@ Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed,
 
 vec4 Temporal(vec3 n, vec3 pos)
 {
-    uvec2 dispatchSize = uvec2(ubo.viewportSize / 8);
+    uvec2 dispatchSize = uvec2(temp_ubo.viewportSize / 8);
     uint launchWidth = dispatchSize.x * gl_WorkGroupSize.x;
     uint seed = uint(gl_GlobalInvocationID.y * launchWidth) + gl_GlobalInvocationID.x;
-    seed *= ubo.frameIndex;
+    seed *= temp_ubo.frameIndex;
 
     vec3 throughput = vec3(1.0);
     vec4 pixelReservoir = texelFetch(initial_candidates_texture, ivec2(gl_GlobalInvocationID.xy), 0).rgba; // (x = index, y = W_y, z = totalWeights, w = M)
@@ -179,12 +203,12 @@ vec4 Temporal(vec3 n, vec3 pos)
     vec3 LightDir = normalize(L.LightPosition.xyz - pos);
     float dist = length(L.LightPosition.xyz - pos);
     float att = 1.0 / (dist * dist);
-    float intensity = 100.0f * att;
-    float F_x = max(dot(n, LightDir), 0.001) * intensity; // F(x) = max(dot(n, L), 0.001) * intensity, where n is the normal and L is the light direction
-    float target_function = 1.0 / F_x; // Reciprocal of the target function F(x) that PDF(X) approximates better with more candidates.
+    float LightIntensity = 1000.0f * att;
+    float F_x = max(dot(n, LightDir), 0.0) * LightIntensity;
 
     // Algorithm 4: Line 6: Reservoir s: s.W = 1 / p^q(s.y) * ( 1 / s.M  * s.totalWeights )
-    reservoir.W_y = target_function * (1.0 / reservoir.M) * reservoir.totalWeights;
+    // (1.0 / F_x) ist he reciprocal of the target function F(x) that PDF(X) approximates better with more candidates.
+    reservoir.W_y = F_x > 0.0 ? (1.0 / F_x) * (1.0 / reservoir.M) * reservoir.totalWeights : 0.0;
 
     return vec4(reservoir.index, reservoir.W_y, reservoir.M, 0.0);
 }
@@ -199,5 +223,4 @@ void main() {
 
     vec4 reservoir_out = Temporal(world_normal.xyz, world_position.xyz);
     imageStore(reservoir_output_image, coords, vec4(reservoir_out));
-
 }

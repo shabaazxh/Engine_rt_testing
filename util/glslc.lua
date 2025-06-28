@@ -51,7 +51,7 @@ local glslc_build_command_ = function( kind, ext, opt, opath, ipaths )
 		buildcommands( "{mkdir} \"" .. odir .. "\"" );
 		buildcommands(
 			 "\"%{wks.location}/" .. glslc ..  "\" "
-			 .. opt .. " -g -O0" 
+			 .. opt .. " -g -O0 --target-env=vulkan1.3" 
 			 .. istr 
 			 .. "-o \"" .. ofile .. "\" "
 			 .. "\"%{file.relpath}\""

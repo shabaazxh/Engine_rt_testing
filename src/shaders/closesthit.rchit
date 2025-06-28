@@ -1,7 +1,11 @@
 #version 460
+
 #extension GL_EXT_ray_tracing : enable
 #extension GL_EXT_scalar_block_layout : require
 #extension GL_EXT_nonuniform_qualifier : enable
+
+#define PI 3.14159265359
+#define NUM_LIGHTS 100
 
 struct Light
 {
@@ -15,7 +19,9 @@ layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
 layout(set = 0, binding = 10, rgba32f) uniform image2D WorldPositionImage;
 layout(set = 0, binding = 12, rgba32f) uniform image2D ReservoirsImage;
 layout(set = 0, binding = 13, rgba32f) uniform image2D NormalImage;
+layout(set = 0, binding = 14, rgba32f) uniform image2D AlbedoImage;
 
+// @TODO: This needs to be deleted. Its a storage buffer which is no longer being used
 struct Res
 {
     int Y;
@@ -25,8 +31,6 @@ struct Res
 layout(std430, binding = 11) buffer ReservoirBuffer {
     Res reservoirs[];
 }ReservoirStorageBuffer;
-
-#define PI 3.14159265359
 
 // Large buffers containing all mesh data
 struct VertexData {
@@ -71,8 +75,6 @@ layout(set = 0, binding = 6, scalar) readonly buffer MaterialBuffer {
 };
 
 layout(set = 0, binding = 7) uniform sampler2D textures[300];
-
-const int NUM_LIGHTS = 51;
 
 layout(set = 0, binding = 8) uniform LightBuffer {
 	Light lights[NUM_LIGHTS];
@@ -229,10 +231,10 @@ void RISReservoir(inout Reservoir reservoir, inout uint seed, vec3 pos, vec3 n, 
         // Get the properties of this light
         float dist = length(light.LightPosition.xyz - pos);
         vec3 light_dir = normalize(light.LightPosition.xyz - pos);
-        float LightIntensity = 100.0f * (1.0 / (dist * dist));
+        float LightIntensity = 1000.0f * (1.0 / (dist * dist));
 
         // Compute RIS weight for this candidate light
-        float F_x = max(dot(n, light_dir), 0.001) * LightIntensity; // Simplied F(x) for weighting. Not sure if need to compute entir BRDF * cosine * ....?  // The target function F(x) that PDF(X) approximates better with more candidates. Using lambert cosine term but this can be other importance sampling methods
+        float F_x = max(dot(n, light_dir), 0.0) * LightIntensity; // Simplied F(x) for weighting. Not sure if need to compute entir BRDF * cosine * ....?  // The target function F(x) that PDF(X) approximates better with more candidates. Using lambert cosine term but this can be other importance sampling methods
 
         // This is p^q(x_i) / p(x_i) where p^q(x_i) is the target function F_x and p(x_i) is the PDF of the uniform distribution which is 1 / NUM_LIGHTS. So we can compute the weight as F_x * rcpUniformDistributionWeight = F_x * (1 / NUM_LIGHTS) = F_x / NUM_LIGHTS
         float xi_weight = rcpM * F_x * rcpUniformDistributionWeight; // Move 1.0 / M to here when computing weight as suggested
@@ -278,12 +280,12 @@ vec3 RISReservoirSampling(vec3 pos, vec3 n, vec3 albedo)
         Light LightSource = lightData.lights[light_index];
         float dist = length(LightSource.LightPosition.xyz - pos);
         vec3 light_dir = normalize(LightSource.LightPosition.xyz - pos);
-        float LightIntensity = 100.0f * (1.0 / (dist * dist));
+        float LightIntensity = 1000.0f * (1.0 / (dist * dist));
 
         // Compute the light weight to prevent bias
         // W_x = (sum(w_i) / M) / pdf(x)
         // Written as: 1 / pdf(x) * (1 / m * sum(w_i)), but remember 1 / pdf(x) and 1 / m is the same as dividing by them since 1 / x is rcp
-        float Fx = max(dot(n, light_dir), 0.001) * LightIntensity;
+        float Fx = max(dot(n, light_dir), 0.0) * LightIntensity;
         float target_function = 1.0 / Fx; //  float(NUM_LIGHTS);
 
         // This is debug to ensure its valid, remove eventually -> this has an issue atm @TODO
@@ -294,12 +296,15 @@ vec3 RISReservoirSampling(vec3 pos, vec3 n, vec3 albedo)
         // We moved rcpM = 1 / float(CANDIDATE_MAX) to func RISReservoir which is computing weight for each candidate as suggested by paper
         reservoir.W_y = target_function * (reservoir.totalWeights);
 
+        // Perform visibility testing. Set reservoir weight to 0 if in shadow
+        float Visibility = CastShadowRay(pos, n, light_dir, dist - 0.001);
+        reservoir.W_y *= Visibility;
+
         // Store the current select sample Y, number of candidates M, and probabilistic weight W_y
         imageStore(ReservoirsImage, ivec2(gl_LaunchIDEXT.xy), vec4(reservoir.index, reservoir.W_y, reservoir.M, 0.0));
 
-        float Visibility = CastShadowRay(pos, n, light_dir, dist - 0.001);
-        vec3 directLighting = computeDirectLighting(pos, n, albedo, light_dir, LightIntensity, LightSource.LightColour.rgb) * reservoir.W_y * Visibility;
-        radiance += throughput * directLighting;
+        vec3 directLighting = albedo * Fx * LightSource.LightColour.rgb;
+        radiance += throughput * directLighting * reservoir.W_y * Visibility;
     }
 
     return radiance;
@@ -324,7 +329,7 @@ vec3 NaiveDirectLighting(vec3 pos, vec3 n, vec3 albedo)
         float dist = length(light.LightPosition.xyz - pos);
         float att = 1.0 / (dist * dist);
         LightColour = light.LightColour.xyz;
-        intensity = 100.0f * att;
+        intensity = 1000.0f * att;
 
         float visibility = CastShadowRay(pos, n, lightDir, length(light.LightPosition.xyz - pos) - 0.001);
         vec3 directLighting = computeDirectLighting(pos, n, albedo, lightDir, intensity, LightColour.rgb) * visibility;
@@ -371,15 +376,8 @@ void main()
 	vec3 worldNormal = normalize(vec3(objectNormal * gl_WorldToObjectEXT).xyz);
 
     imageStore(NormalImage, ivec2(gl_LaunchIDEXT.xy), vec4(worldNormal, 0.0));
+    imageStore(AlbedoImage, ivec2(gl_LaunchIDEXT.xy), vec4(albedo, 0.0));
 
-    // Compute direct lighting at the first hit
-    vec3 sunDirection = normalize(vec3(0.0f, 1.0f, 0.5)); //.5 for z // vec3(0.0, 1.0, 0.35)
-    float sunIntensity = 20.0;
-    vec3 sunColor = vec3(1.0, 0.95, 0.9);
-    float sunAngularSize = 0.8;
-
-    //vec3 indirectLight = computeIndirectLightingBEFORENEW(worldPos, worldNormal, albedo, sunIntensity);
     vec3 DirectLight = RISReservoirSampling(worldPos, worldNormal, albedo);
-    //vec3 DirectLight = NaiveDirectLighting(worldPos, worldNormal, albedo);
     rayPayLoad.colour = DirectLight;
 }

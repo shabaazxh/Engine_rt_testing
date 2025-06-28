@@ -69,6 +69,17 @@ vk::RayPass::RayPass(Context& context, std::shared_ptr<Scene>& scene, std::share
 		1
 	);
 
+	m_AlbedoTarget = CreateImageTexture2D(
+		"RayPassRT_Albedo",
+		context,
+		m_width,
+		m_height,
+		VK_FORMAT_R32G32B32A32_SFLOAT,
+		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		VK_IMAGE_ASPECT_COLOR_BIT,
+		1
+	);
+
 	m_InitialCandidates = CreateImageTexture2D(
 		"InitialCandidates_RT",
 		context,
@@ -111,6 +122,15 @@ vk::RayPass::RayPass(Context& context, std::shared_ptr<Scene>& scene, std::share
 
 		ImageTransition(
 			cmd,
+			m_AlbedoTarget.image,
+			VK_FORMAT_R32G32B32A32_SFLOAT,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0,
+			VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+		);
+
+		ImageTransition(
+			cmd,
 			m_InitialCandidates.image,
 			VK_FORMAT_R32G32B32A32_SFLOAT,
 			VK_IMAGE_LAYOUT_UNDEFINED,
@@ -134,6 +154,7 @@ vk::RayPass::~RayPass()
 	m_RenderTarget.Destroy(context.device);
 	m_WorldPositionsTarget.Destroy(context.device);
 	m_NormalsTarget.Destroy(context.device);
+	m_AlbedoTarget.Destroy(context.device);
 	m_InitialCandidates.Destroy(context.device);
 
 	vkDestroyPipeline(context.device, m_Pipeline, nullptr);
@@ -304,6 +325,15 @@ void vk::RayPass::Execute(VkCommandBuffer cmd)
 
 	ImageTransition(
 		cmd,
+		m_AlbedoTarget.image,
+		VK_FORMAT_R32G32B32A32_SFLOAT,
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+		VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR
+	);
+
+	ImageTransition(
+		cmd,
 		m_InitialCandidates.image,
 		VK_FORMAT_R32G32B32A32_SFLOAT,
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
@@ -330,7 +360,7 @@ void vk::RayPass::Execute(VkCommandBuffer cmd)
 
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, m_Pipeline);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, m_PipelineLayout, 0, 1, &m_descriptorSets[currentFrame], 0, nullptr);
-	vkCmdTraceRaysKHR(cmd, &raygen_shader_sbt_entry, &miss_shader_sbt_entry, &hit_shader_sbt_entry, &callable_shader_sbt_entry, context.extent.width, context.extent.height, 3);
+	vkCmdTraceRaysKHR(cmd, &raygen_shader_sbt_entry, &miss_shader_sbt_entry, &hit_shader_sbt_entry, &callable_shader_sbt_entry, context.extent.width, context.extent.height, 1);
 
 	ImageTransition(
 		cmd,
@@ -355,6 +385,16 @@ void vk::RayPass::Execute(VkCommandBuffer cmd)
 	ImageTransition(
 		cmd,
 		m_NormalsTarget.image,
+		VK_FORMAT_R32G32B32A32_SFLOAT,
+		VK_IMAGE_LAYOUT_GENERAL,
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+		VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+	);
+
+	ImageTransition(
+		cmd,
+		m_AlbedoTarget.image,
 		VK_FORMAT_R32G32B32A32_SFLOAT,
 		VK_IMAGE_LAYOUT_GENERAL,
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -486,6 +526,7 @@ void vk::RayPass::BuildDescriptors()
 			CreateDescriptorBinding(11, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
 			CreateDescriptorBinding(12, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
 			CreateDescriptorBinding(13, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
+			CreateDescriptorBinding(14, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR)
 		};
 
 		m_descriptorSetLayout = CreateDescriptorSetLayout(context, bindings);
@@ -626,5 +667,16 @@ void vk::RayPass::BuildDescriptors()
 		};
 
 		UpdateDescriptorSet(context, 13, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	}
+
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		VkDescriptorImageInfo imageInfo = {
+			.sampler = VK_NULL_HANDLE,
+			.imageView = m_AlbedoTarget.imageView,
+			.imageLayout = VK_IMAGE_LAYOUT_GENERAL
+		};
+
+		UpdateDescriptorSet(context, 14, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	}
 }

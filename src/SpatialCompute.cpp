@@ -8,7 +8,7 @@
 #include "Utils.hpp"
 #include "Buffer.hpp"
 
-vk::SpatialCompute::SpatialCompute(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initial_candidates, Image& hit_world_positions, Image& hit_normals, Image& temporal_pass_reservoirs) :
+vk::SpatialCompute::SpatialCompute(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initial_candidates, Image& hit_world_positions, Image& hit_normals, Image& hit_albedo, Image& temporal_pass_reservoirs) :
 	context{ context },
 	scene{ scene },
 	camera{ camera },
@@ -16,6 +16,7 @@ vk::SpatialCompute::SpatialCompute(Context& context, std::shared_ptr<Scene>& sce
 	temporal_pass_reservoirs{ temporal_pass_reservoirs },
 	hit_world_positions{ hit_world_positions },
 	hit_normals{ hit_normals },
+	hit_albedo { hit_albedo },
 	m_Pipeline{ VK_NULL_HANDLE },
 	m_PipelineLayout{ VK_NULL_HANDLE },
 	m_descriptorSetLayout{ VK_NULL_HANDLE },
@@ -28,7 +29,7 @@ vk::SpatialCompute::SpatialCompute(Context& context, std::shared_ptr<Scene>& sce
 
 	m_uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 	for (auto& buffer : m_uniformBuffers)
-		buffer = CreateBuffer("SpatialComputeUBO", context, sizeof(ReusePass), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+		buffer = CreateBuffer("SpatialComputeUBO", context, sizeof(uSpatialPass), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
 	m_RenderTarget = CreateImageTexture2D(
 		"SpatialComputeRT",
@@ -155,9 +156,11 @@ void vk::SpatialCompute::Execute(VkCommandBuffer cmd)
 
 void vk::SpatialCompute::Update()
 {
-	reuse_pass_uniform_data.frameIndex = frameNumber;
-	reuse_pass_uniform_data.viewportSize = { m_width, m_height };
-	m_uniformBuffers[currentFrame].WriteToBuffer(&reuse_pass_uniform_data, sizeof(ReusePass));
+	SpatialPassData.frameIndex = frameNumber;
+	SpatialPassData.viewportSize = { m_width, m_height };
+	SpatialPassData.M = SpatialPassData.M;
+	SpatialPassData.radius = SpatialPassData.radius;
+	m_uniformBuffers[currentFrame].WriteToBuffer(&SpatialPassData, sizeof(uSpatialPass));
 }
 
 void vk::SpatialCompute::CreatePipeline()
@@ -182,9 +185,11 @@ void vk::SpatialCompute::BuildDescriptors()
 			CreateDescriptorBinding(2, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT), // Initial candidates
 			CreateDescriptorBinding(3, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT), // World
 			CreateDescriptorBinding(4, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT), // Normal
-			CreateDescriptorBinding(5, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT), // Temporal pass results
-			CreateDescriptorBinding(6, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT), // Store spatial reuse updated reservoirs
-			CreateDescriptorBinding(7, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT)  // Store shading result
+			CreateDescriptorBinding(5, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT), // Albedo
+			CreateDescriptorBinding(6, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT), // Temporal pass results
+			CreateDescriptorBinding(7, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT), // Store spatial reuse updated reservoirs
+			CreateDescriptorBinding(8, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT),  // Store shading result
+			CreateDescriptorBinding(9, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_COMPUTE_BIT),
 		};
 
 		m_descriptorSetLayout = CreateDescriptorSetLayout(context, bindings);
@@ -196,7 +201,7 @@ void vk::SpatialCompute::BuildDescriptors()
 		VkDescriptorBufferInfo buffer_info = {
 			.buffer = m_uniformBuffers[i].buffer,
 			.offset = 0,
-			.range = sizeof(ReusePass)
+			.range = sizeof(uSpatialPass)
 		};
 		UpdateDescriptorSet(context, 0, buffer_info, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 	}
@@ -252,11 +257,23 @@ void vk::SpatialCompute::BuildDescriptors()
 		VkDescriptorImageInfo imageInfo = {
 
 			.sampler = clampToEdgeSamplerAniso,
-			.imageView = temporal_pass_reservoirs.imageView,
+			.imageView = hit_albedo.imageView,
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		};
 
 		UpdateDescriptorSet(context, 5, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	}
+
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		VkDescriptorImageInfo imageInfo = {
+
+			.sampler = clampToEdgeSamplerAniso,
+			.imageView = temporal_pass_reservoirs.imageView,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+
+		UpdateDescriptorSet(context, 6, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 	}
 
 
@@ -268,7 +285,7 @@ void vk::SpatialCompute::BuildDescriptors()
 			.imageLayout = VK_IMAGE_LAYOUT_GENERAL
 		};
 
-		UpdateDescriptorSet(context, 6, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		UpdateDescriptorSet(context, 7, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	}
 
 	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
@@ -279,6 +296,11 @@ void vk::SpatialCompute::BuildDescriptors()
 			.imageLayout = VK_IMAGE_LAYOUT_GENERAL
 		};
 
-		UpdateDescriptorSet(context, 7, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		UpdateDescriptorSet(context, 8, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	}
+
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		UpdateDescriptorSet(context, 9, scene->TopLevelAccelerationStructure.handle, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR);
 	}
 }

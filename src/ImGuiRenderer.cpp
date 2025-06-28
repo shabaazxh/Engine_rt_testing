@@ -69,6 +69,11 @@ void vk::ImGuiRenderer::Update(const std::shared_ptr<Scene>& scene, const std::s
     ImGui::SliderInt("Bounces: ", &rtxSettings.bounces, 0, 10);
     ImGui::SliderInt("PastFrames: ", &rtxSettings.numPastFrames, 0, 10);
 
+    ImGui::SeparatorText("other");
+    ImGui::SliderInt("Temporal M: ", &TemporalPassData.M, 1, 100);
+	ImGui::SliderInt("Spatial M: ", &SpatialPassData.M, 1, 100);
+	ImGui::SliderInt("Spatial Radius: ", &SpatialPassData.radius, 1, 100);
+
     if (ImGui::CollapsingHeader("Directional Light"))
     {
         auto& lights = scene->GetLights();

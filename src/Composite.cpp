@@ -5,10 +5,9 @@
 #include "Buffer.hpp"
 #include "RenderPass.hpp"
 
-vk::Composite::Composite(Context& context, Image& LightingPass, Image& BloomPass) :
+vk::Composite::Composite(Context& context, Image& shading_result) :
 	context{ context },
-	LightingPass{ LightingPass },
-	BloomPass{ BloomPass },
+	shading_result{ shading_result },
 	m_Pipeline{ VK_NULL_HANDLE },
 	m_PipelineLayout{ VK_NULL_HANDLE },
 	m_descriptorSetLayout{ VK_NULL_HANDLE },
@@ -77,23 +76,11 @@ void vk::Composite::Resize()
 	{
 		VkDescriptorImageInfo imageInfo = {
 			.sampler = repeatSamplerAniso,
-			.imageView = LightingPass.imageView,
+			.imageView = shading_result.imageView,
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		};
 
 		UpdateDescriptorSet(context, 0, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-	}
-
-	// Bloom pass
-	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
-	{
-		VkDescriptorImageInfo imageInfo = {
-			.sampler = repeatSamplerAniso,
-			.imageView = BloomPass.imageView,
-			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-		};
-
-		UpdateDescriptorSet(context, 1, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 	}
 }
 
@@ -211,8 +198,6 @@ void vk::Composite::BuildDescriptors()
 		// Set = 0, binding 0 = cameraUBO, binding = 1 = textures
 		std::vector<VkDescriptorSetLayoutBinding> bindings = {
 			CreateDescriptorBinding(0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
-			CreateDescriptorBinding(1, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
-			CreateDescriptorBinding(2, 5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
 		};
 
 		m_descriptorSetLayout = CreateDescriptorSetLayout(context, bindings);
@@ -225,22 +210,10 @@ void vk::Composite::BuildDescriptors()
 	{
 		VkDescriptorImageInfo imageInfo = {
 			.sampler = repeatSamplerAniso,
-			.imageView = LightingPass.imageView,
+			.imageView = shading_result.imageView,
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		};
 
 		UpdateDescriptorSet(context, 0, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-	}
-
-	// Bloom pass
-	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
-	{
-		VkDescriptorImageInfo imageInfo = {
-			.sampler = repeatSamplerAniso,
-			.imageView = BloomPass.imageView,
-			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-		};
-
-		UpdateDescriptorSet(context, 1, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 	}
 }
