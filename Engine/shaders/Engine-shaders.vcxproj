@@ -48,6 +48,13 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='release|x64'">
   </ItemDefinitionGroup>
   <ItemGroup>
+    <CustomBuild Include="..\..\src\shaders\CandidatesCompute.comp">
+      <FileType>Document</FileType>
+      <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+      <Outputs>../../assets/shaders/CandidatesCompute.comp.spv</Outputs>
+      <Message>GLSLC: [COMP] '%(Filename)%(Extension)'</Message>
+    </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\MotionVectors.frag">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
@@ -131,6 +138,13 @@
 "$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
       <Outputs>../../assets/shaders/fs_tri.vert.spv</Outputs>
       <Message>GLSLC: [VERT] '%(Filename)%(Extension)'</Message>
+    </CustomBuild>
+    <CustomBuild Include="..\..\src\shaders\gbuffer.frag">
+      <FileType>Document</FileType>
+      <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+      <Outputs>../../assets/shaders/gbuffer.frag.spv</Outputs>
+      <Message>GLSLC: [FRAG] '%(Filename)%(Extension)'</Message>
     </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\history.frag">
       <FileType>Document</FileType>

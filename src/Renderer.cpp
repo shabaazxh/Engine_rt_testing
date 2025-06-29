@@ -111,6 +111,10 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	std::cout << "Number of Lights: " << m_scene->GetLights().size() << std::endl;
 
 	// Renderer passes
+	m_GBuffer = std::make_unique<GBuffer>(context, m_scene, m_camera);
+
+	m_CandidatesPass = std::make_unique<Candidates>(context, m_scene, m_camera, m_GBuffer->GetGBufferMRT());
+
 	// Create the initial candidates using RIS
 	m_RayPass		    = std::make_unique<RayPass>(context, m_scene, m_camera);
 
@@ -130,7 +134,7 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	m_CompositePass		= std::make_unique<Composite>(context, m_SpatialComputePass->GetShadingResult());
 
 	// Currently passing the spatial pass result to the composite to display, switch to RayPass to show initial candidates
-	m_PresentPass		= std::make_unique<PresentPass>(context, m_RayPass->GetRenderTarget(), m_CompositePass->GetRenderTarget());
+	m_PresentPass		= std::make_unique<PresentPass>(context, m_CandidatesPass->GetRenderTarget(), m_CompositePass->GetRenderTarget());
 
 	// @NOTE: The final reservoirs from spatial reuse are the ones which should be copied to temporal pass "previous frame"
 
@@ -143,6 +147,8 @@ void vk::Renderer::Destroy()
 
 	ImGuiRenderer::Shutdown(context);
 	m_DepthPrepass.reset();
+	m_GBuffer.reset();
+	m_CandidatesPass.reset();
 	m_MotionVectorsPass.reset();
 	m_TemporalComputePass.reset();
 	m_SpatialComputePass.reset();
@@ -306,6 +312,8 @@ void vk::Renderer::Render(double deltaTime)
 
 
 		// m_DepthPrepass->Execute(cmd);
+		m_GBuffer->Execute(cmd);
+		m_CandidatesPass->Execute(cmd);
 		m_RayPass->Execute(cmd);
 		m_MotionVectorsPass->Execute(cmd);
 		m_TemporalComputePass->Execute(cmd);
@@ -387,6 +395,7 @@ void vk::Renderer::Update(double deltaTime)
 	m_scene->Update(context.window);
 
 	ImGuiRenderer::Update(m_scene, m_camera);
+	m_CandidatesPass->Update();
 	m_RayPass->Update();
 	m_TemporalComputePass->Update();
 	m_SpatialComputePass->Update();

@@ -97,6 +97,7 @@
   <ItemGroup>
     <ClInclude Include="..\src\Buffer.hpp" />
     <ClInclude Include="..\src\Camera.hpp" />
+    <ClInclude Include="..\src\Candidates.hpp" />
     <ClInclude Include="..\src\Composite.hpp" />
     <ClInclude Include="..\src\Context.hpp" />
     <ClInclude Include="..\src\DepthPrepass.hpp" />
@@ -133,6 +134,7 @@
   <ItemGroup>
     <ClCompile Include="..\src\Buffer.cpp" />
     <ClCompile Include="..\src\Camera.cpp" />
+    <ClCompile Include="..\src\Candidates.cpp" />
     <ClCompile Include="..\src\Composite.cpp" />
     <ClCompile Include="..\src\Context.cpp" />
     <ClCompile Include="..\src\DepthPrepass.cpp" />

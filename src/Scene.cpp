@@ -449,7 +449,7 @@ void vk::Scene::DrawGLTF(VkCommandBuffer cmd, VkPipelineLayout pipelineLayout)
 			// Doing this for now. Will update in the future
 			if (model.name.find("Sponza") != std::string::npos)
 			{
-				pc.ModelMatrix = glm::scale(pc.ModelMatrix, glm::vec3(0.005, 0.005, 0.005));
+				pc.ModelMatrix = glm::scale(pc.ModelMatrix, glm::vec3(1.0f, 1.0f, 1.0f));
 			}
 			else
 			{

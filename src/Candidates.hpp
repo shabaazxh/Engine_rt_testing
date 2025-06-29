@@ -3,6 +3,7 @@
 #include <memory>
 #include "Image.hpp"
 #include <vector>
+#include "GBuffer.hpp"
 
 namespace vk
 {
@@ -10,19 +11,17 @@ namespace vk
 	class Camera;
 	class Scene;
 
-	class TemporalCompute
+	class Candidates
 	{
 	public:
-		explicit TemporalCompute(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initial_candidates, Image& hit_world_positions, Image& hit_normals, Image& motion_vectors);
-		~TemporalCompute();
+		explicit Candidates(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, const GBuffer::GBufferMRT& gbufferMRT);
+		~Candidates();
 
 		void Execute(VkCommandBuffer cmd);
 		void Update();
 		void Resize();
 
-		void CopyImageToImage(const Image& currentSpatialTemporalReservoirImage);
-
-		Image& GetRenderTarget() { return m_RenderTarget; }
+		Image& GetRenderTarget() { return m_ShadingResult; }
 	private:
 		void CreatePipeline();
 		void BuildDescriptors();
@@ -30,12 +29,9 @@ namespace vk
 		Context& context;
 		std::shared_ptr<Scene> scene;
 		std::shared_ptr<Camera> camera;
+		const GBuffer::GBufferMRT& gbufferMRT;
 		Image m_RenderTarget;
-		Image m_PreviousImage;
-		Image& initial_candidates;
-		Image& motion_vectors;
-		Image& hit_world_positions;
-		Image& hit_normals;
+		Image m_ShadingResult;
 
 		VkPipeline m_Pipeline;
 		VkPipelineLayout m_PipelineLayout;

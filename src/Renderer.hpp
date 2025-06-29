@@ -18,6 +18,8 @@
 #include "MotionVectors.hpp"
 #include "TemporalCompute.hpp"
 #include "SpatialCompute.hpp"
+#include "GBuffer.hpp"
+#include "Candidates.hpp"
 
 namespace vk
 {
@@ -60,6 +62,8 @@ namespace vk
 
 		std::unique_ptr<DepthPrepass>     m_DepthPrepass;
 		std::unique_ptr<ForwardPass>	  m_ForwardPass;
+		std::unique_ptr<GBuffer>	      m_GBuffer;
+		std::unique_ptr<Candidates>       m_CandidatesPass;
 		std::unique_ptr<ShadowMap>		  m_ShadowMap;
 		std::unique_ptr<Composite>        m_CompositePass;
 		std::unique_ptr<PresentPass>	  m_PresentPass;
