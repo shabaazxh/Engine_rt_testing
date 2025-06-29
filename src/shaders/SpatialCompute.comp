@@ -42,6 +42,10 @@ layout(set = 0, binding = 8, rgba32f) uniform image2D shading_result_image;
 
 layout(set = 0, binding = 9) uniform accelerationStructureEXT topLevelAS;
 
+layout(set = 0, binding = 10) uniform sampler2D g_buffer_world_position;
+layout(set = 0, binding = 11) uniform sampler2D g_buffer_normals;
+layout(set = 0, binding = 12) uniform sampler2D g_albedo;
+
 struct Reservoir
 {
     int index;
@@ -256,11 +260,11 @@ void main() {
     vec3 throughput = vec3(1.0);
 
     // Get world and normal data
-    vec4 world_position = texelFetch(hit_world_position_texture, coords, 0);
-    vec4 world_normal   = texelFetch(hit_normals_texture, coords, 0);
+    vec4 world_position = texelFetch(g_buffer_world_position, coords, 0);
+    vec4 world_normal   = texelFetch(g_buffer_normals, coords, 0) * 2.0 - 1.0;
     // vec4 reservoir_from_temporal = texelFetch(temporal_pass_reservoirs, coords, 0);
 
-    vec3 albedo = texelFetch(hit_albedo, ivec2(gl_GlobalInvocationID.xy), 0).rgb;
+    vec3 albedo = texelFetch(g_albedo, coords, 0).rgb;
 
     vec4 radiance = Spatial(world_normal.xyz, world_position.xyz, albedo);
 

@@ -36,6 +36,8 @@ layout(set = 0, binding = 5) uniform sampler2D motion_vectors_texture;
 layout(set = 0, binding = 6) uniform sampler2D previous_frame_texture;
 layout(set = 0, binding = 7, rgba32f) uniform image2D reservoir_output_image;
 layout(set = 0, binding = 8) uniform accelerationStructureEXT topLevelAS;
+layout(set = 0, binding = 9) uniform sampler2D g_buffer_world_position;
+layout(set = 0, binding = 10) uniform sampler2D g_buffer_normals;
 
 
 // Reference: https://github.com/NVIDIAGameWorks/RTXGI-DDGI/blob/main/samples/test-harness/shaders/include/Random.hlsl#L42
@@ -220,8 +222,8 @@ void main() {
     ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
 
     // Get world and normal data
-    vec4 world_position = texelFetch(hit_world_position_texture, coords, 0);
-    vec4 world_normal   = texelFetch(hit_normals_texture, coords, 0);
+    vec4 world_position = texelFetch(g_buffer_world_position, coords, 0);
+    vec4 world_normal   = texelFetch(g_buffer_normals, coords, 0) * 2.0 - 1.0;
 
     vec4 reservoir_out = Temporal(world_normal.xyz, world_position.xyz);
     imageStore(reservoir_output_image, coords, vec4(reservoir_out));

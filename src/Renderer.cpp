@@ -118,16 +118,16 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	// Create the initial candidates using RIS
 	m_RayPass		    = std::make_unique<RayPass>(context, m_scene, m_camera);
 
-	m_MotionVectorsPass = std::make_unique<MotionVectors>(context, m_camera, m_RayPass->GetWorldHitPositions());
+	m_MotionVectorsPass = std::make_unique<MotionVectors>(context, m_camera, m_GBuffer->GetGBufferMRT().WorldPositions);
 
 	// For now, we should store the output from the temporal pass as "previous frame" and this should hopefully work
 	// Once that works, we can extend it and make previous frame be the output from the spatial pass
 	// We will begin with the temporal pass for testing to ensure temporal works
 	// Image& initial_candidates, Image& hit_world_positions, Image& hit_normals, Image& motion_vectors)
-	m_TemporalComputePass = std::make_unique<TemporalCompute>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates(), m_RayPass->GetWorldHitPositions(), m_RayPass->GetHitNormals(), m_MotionVectorsPass->GetRenderTarget());
+	m_TemporalComputePass = std::make_unique<TemporalCompute>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates(), m_RayPass->GetWorldHitPositions(), m_RayPass->GetHitNormals(), m_MotionVectorsPass->GetRenderTarget(), m_GBuffer->GetGBufferMRT());
 
 	// Spatial pass will take in the temporal resampled reservoir results and spatially reuse to resample
-	m_SpatialComputePass = std::make_unique<SpatialCompute>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates(), m_RayPass->GetWorldHitPositions(), m_RayPass->GetHitNormals(), m_RayPass->GetAlbedo(), m_TemporalComputePass->GetRenderTarget());
+	m_SpatialComputePass = std::make_unique<SpatialCompute>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates(), m_RayPass->GetWorldHitPositions(), m_RayPass->GetHitNormals(), m_RayPass->GetAlbedo(), m_TemporalComputePass->GetRenderTarget(), m_GBuffer->GetGBufferMRT());
 
 	// A final shading pass should go here? Which takes in the Spatial reuse reservoirs and computes lighting. This could perhaps
 	// Happen in the spatial pass? Since we can spatially reuse for the current pixel and then use that updated reservoir for shading output from spatial pass

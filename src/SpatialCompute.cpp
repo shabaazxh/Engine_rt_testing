@@ -8,7 +8,7 @@
 #include "Utils.hpp"
 #include "Buffer.hpp"
 
-vk::SpatialCompute::SpatialCompute(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initial_candidates, Image& hit_world_positions, Image& hit_normals, Image& hit_albedo, Image& temporal_pass_reservoirs) :
+vk::SpatialCompute::SpatialCompute(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initial_candidates, Image& hit_world_positions, Image& hit_normals, Image& hit_albedo, Image& temporal_pass_reservoirs, const GBuffer::GBufferMRT& gbufferMRT) :
 	context{ context },
 	scene{ scene },
 	camera{ camera },
@@ -17,6 +17,7 @@ vk::SpatialCompute::SpatialCompute(Context& context, std::shared_ptr<Scene>& sce
 	hit_world_positions{ hit_world_positions },
 	hit_normals{ hit_normals },
 	hit_albedo { hit_albedo },
+	gbufferMRT{ gbufferMRT },
 	m_Pipeline{ VK_NULL_HANDLE },
 	m_PipelineLayout{ VK_NULL_HANDLE },
 	m_descriptorSetLayout{ VK_NULL_HANDLE },
@@ -190,6 +191,9 @@ void vk::SpatialCompute::BuildDescriptors()
 			CreateDescriptorBinding(7, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT), // Store spatial reuse updated reservoirs
 			CreateDescriptorBinding(8, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT),  // Store shading result
 			CreateDescriptorBinding(9, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_COMPUTE_BIT),
+			CreateDescriptorBinding(10, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT), // GBuffer - World position
+			CreateDescriptorBinding(11, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT), // GBuffer - World Normal
+			CreateDescriptorBinding(12, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT)  // GBuffer - Albedo
 		};
 
 		m_descriptorSetLayout = CreateDescriptorSetLayout(context, bindings);
@@ -302,5 +306,41 @@ void vk::SpatialCompute::BuildDescriptors()
 	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
 	{
 		UpdateDescriptorSet(context, 9, scene->TopLevelAccelerationStructure.handle, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR);
+	}
+
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		VkDescriptorImageInfo imageInfo = {
+
+			.sampler = clampToEdgeSamplerAniso,
+			.imageView = gbufferMRT.WorldPositions.imageView,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+
+		UpdateDescriptorSet(context, 10, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	}
+
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		VkDescriptorImageInfo imageInfo = {
+
+			.sampler = clampToEdgeSamplerAniso,
+			.imageView = gbufferMRT.Normal.imageView,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+
+		UpdateDescriptorSet(context, 11, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	}
+
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		VkDescriptorImageInfo imageInfo = {
+
+			.sampler = clampToEdgeSamplerAniso,
+			.imageView = gbufferMRT.Albedo.imageView,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+
+		UpdateDescriptorSet(context, 12, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 	}
 }

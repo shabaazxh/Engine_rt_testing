@@ -8,7 +8,7 @@
 #include "Utils.hpp"
 #include "Buffer.hpp"
 
-vk::TemporalCompute::TemporalCompute(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initial_candidates, Image& hit_world_positions, Image& hit_normals, Image& motion_vectors) :
+vk::TemporalCompute::TemporalCompute(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initial_candidates, Image& hit_world_positions, Image& hit_normals, Image& motion_vectors, const GBuffer::GBufferMRT& gbufferMRT) :
 	context{ context },
 	scene{ scene },
 	camera{ camera },
@@ -16,6 +16,7 @@ vk::TemporalCompute::TemporalCompute(Context& context, std::shared_ptr<Scene>& s
 	motion_vectors{ motion_vectors },
 	hit_world_positions { hit_world_positions },
 	hit_normals { hit_normals },
+	gbufferMRT{ gbufferMRT },
 	m_Pipeline{ VK_NULL_HANDLE },
 	m_PipelineLayout{ VK_NULL_HANDLE },
 	m_descriptorSetLayout{ VK_NULL_HANDLE },
@@ -256,6 +257,8 @@ void vk::TemporalCompute::BuildDescriptors()
 			CreateDescriptorBinding(6, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT), // Previous frame
 			CreateDescriptorBinding(7, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT), // Output
 			CreateDescriptorBinding(8, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_COMPUTE_BIT),
+			CreateDescriptorBinding(9, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT),  // GBuffer - World position
+			CreateDescriptorBinding(10, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT) // GBuffer - World Normal
 		};
 
 		m_descriptorSetLayout = CreateDescriptorSetLayout(context, bindings);
@@ -356,5 +359,29 @@ void vk::TemporalCompute::BuildDescriptors()
 	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
 	{
 		UpdateDescriptorSet(context, 8, scene->TopLevelAccelerationStructure.handle, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR);
+	}
+
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		VkDescriptorImageInfo imageInfo = {
+
+			.sampler = clampToEdgeSamplerAniso,
+			.imageView = gbufferMRT.WorldPositions.imageView,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+
+		UpdateDescriptorSet(context, 9, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	}
+
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		VkDescriptorImageInfo imageInfo = {
+
+			.sampler = clampToEdgeSamplerAniso,
+			.imageView = gbufferMRT.Normal.imageView,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+
+		UpdateDescriptorSet(context, 10, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 	}
 }
