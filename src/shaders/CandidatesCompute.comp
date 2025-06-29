@@ -24,7 +24,7 @@ layout(set = 0, binding = 0) uniform CandidatesPassUniforms
     int M;
 } cand_ubo;
 
-#define CANDIDATE_MAX 32
+#define CANDIDATE_MAX cand_ubo.M
 
 layout(set = 0, binding = 1) uniform LightBuffer {
 	Light lights[NUM_LIGHTS];

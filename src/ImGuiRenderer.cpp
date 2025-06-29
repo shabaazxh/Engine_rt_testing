@@ -70,6 +70,7 @@ void vk::ImGuiRenderer::Update(const std::shared_ptr<Scene>& scene, const std::s
     ImGui::SliderInt("PastFrames: ", &rtxSettings.numPastFrames, 0, 10);
 
     ImGui::SeparatorText("other");
+	ImGui::SliderInt("Candidate M: ", &CandidatesPassData.M, 1, 100);
     ImGui::SliderInt("Temporal M: ", &TemporalPassData.M, 1, 100);
 	ImGui::SliderInt("Spatial M: ", &SpatialPassData.M, 1, 100);
 	ImGui::SliderInt("Spatial Radius: ", &SpatialPassData.radius, 1, 100);
@@ -97,9 +98,10 @@ void vk::ImGuiRenderer::Update(const std::shared_ptr<Scene>& scene, const std::s
     ImGui::Checkbox("Debug Textures", &enableTextureDebug);
     if (enableTextureDebug)
     {
-        ImGui::Begin("Debug Textures");
+        ImGui::Begin("Debug TexturesBox");
+		std::printf("Number of textures: %zu\n", textureIDs.size());
         for (size_t i = 0; i < textureIDs.size(); ++i) {
-            ImGui::Image(textureIDs[i], ImVec2(400, 400));
+            ImGui::Image(textureIDs[i], ImVec2(800, 600));
         }
         ImGui::End();
     }

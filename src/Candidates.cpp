@@ -153,7 +153,7 @@ void vk::Candidates::Update()
 {
 	CandidatesPassData.frameIndex = frameNumber;
 	CandidatesPassData.viewportSize = { m_width, m_height };
-	CandidatesPassData.M = TemporalPassData.M;
+	CandidatesPassData.M = CandidatesPassData.M;
 	m_uniformBuffers[currentFrame].WriteToBuffer(&CandidatesPassData, sizeof(uCandidatesPass));
 }
 

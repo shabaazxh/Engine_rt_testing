@@ -14,20 +14,8 @@ namespace vk
         static std::vector<std::function<void()>> ImGuiComponents;
         static std::vector<void*> textureIDs;
 
-        inline void AddImGuiComponent(std::function<void()> func) {
-            if (func) { // Check if the function is valid
-                ImGuiComponents.push_back(func);
-                std::cout << "Added component. Total: "
-                    << ImGuiComponents.size() << std::endl;
-            }
-            else {
-                std::cout << "Failed to add: Component is null!" << std::endl;
-            }
-        }
-
         // Todo: When resizing, somehow clear the list and add the new re-sized versions?
         void AddTexture(VkSampler sampler, VkImageView imageView, VkImageLayout imageLayout);
-
 
         static std::vector<VkDescriptorPoolSize> ImGuiPoolSizes = {
             {VK_DESCRIPTOR_TYPE_SAMPLER, 1000},

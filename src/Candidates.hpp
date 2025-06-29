@@ -22,6 +22,8 @@ namespace vk
 		void Resize();
 
 		Image& GetRenderTarget() { return m_ShadingResult; }
+		Image& GetInitialCandidates() { return m_RenderTarget; }
+
 	private:
 		void CreatePipeline();
 		void BuildDescriptors();

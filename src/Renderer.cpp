@@ -124,21 +124,22 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	// Once that works, we can extend it and make previous frame be the output from the spatial pass
 	// We will begin with the temporal pass for testing to ensure temporal works
 	// Image& initial_candidates, Image& hit_world_positions, Image& hit_normals, Image& motion_vectors)
-	m_TemporalComputePass = std::make_unique<TemporalCompute>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates(), m_RayPass->GetWorldHitPositions(), m_RayPass->GetHitNormals(), m_MotionVectorsPass->GetRenderTarget(), m_GBuffer->GetGBufferMRT());
+	m_TemporalComputePass = std::make_unique<TemporalCompute>(context, m_scene, m_camera, m_CandidatesPass->GetInitialCandidates(), m_RayPass->GetWorldHitPositions(), m_RayPass->GetHitNormals(), m_MotionVectorsPass->GetRenderTarget(), m_GBuffer->GetGBufferMRT());
 
 	// Spatial pass will take in the temporal resampled reservoir results and spatially reuse to resample
-	m_SpatialComputePass = std::make_unique<SpatialCompute>(context, m_scene, m_camera, m_RayPass->GetInitialCandidates(), m_RayPass->GetWorldHitPositions(), m_RayPass->GetHitNormals(), m_RayPass->GetAlbedo(), m_TemporalComputePass->GetRenderTarget(), m_GBuffer->GetGBufferMRT());
+	m_SpatialComputePass = std::make_unique<SpatialCompute>(context, m_scene, m_camera, m_CandidatesPass->GetInitialCandidates(), m_RayPass->GetWorldHitPositions(), m_RayPass->GetHitNormals(), m_RayPass->GetAlbedo(), m_TemporalComputePass->GetRenderTarget(), m_GBuffer->GetGBufferMRT());
 
 	// A final shading pass should go here? Which takes in the Spatial reuse reservoirs and computes lighting. This could perhaps
 	// Happen in the spatial pass? Since we can spatially reuse for the current pixel and then use that updated reservoir for shading output from spatial pass
 	m_CompositePass		= std::make_unique<Composite>(context, m_SpatialComputePass->GetShadingResult());
 
 	// Currently passing the spatial pass result to the composite to display, switch to RayPass to show initial candidates
-	m_PresentPass		= std::make_unique<PresentPass>(context, m_CandidatesPass->GetRenderTarget(), m_CompositePass->GetRenderTarget());
+	m_PresentPass		= std::make_unique<PresentPass>(context, m_SpatialComputePass->GetRenderTarget(), m_CompositePass->GetRenderTarget());
 
 	// @NOTE: The final reservoirs from spatial reuse are the ones which should be copied to temporal pass "previous frame"
 
 	ImGuiRenderer::Initialize(context);
+	ImGuiRenderer::AddTexture(clampToEdgeSamplerAniso, m_GBuffer->GetGBufferMRT().Normal.imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 void vk::Renderer::Destroy()
@@ -314,7 +315,7 @@ void vk::Renderer::Render(double deltaTime)
 		// m_DepthPrepass->Execute(cmd);
 		m_GBuffer->Execute(cmd);
 		m_CandidatesPass->Execute(cmd);
-		m_RayPass->Execute(cmd);
+		// m_RayPass->Execute(cmd);
 		m_MotionVectorsPass->Execute(cmd);
 		m_TemporalComputePass->Execute(cmd);
 		m_SpatialComputePass->Execute(cmd);
