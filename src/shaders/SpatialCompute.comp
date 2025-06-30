@@ -116,80 +116,6 @@ vec2 DiskPoint(float sampleRadius, float x, float y)
 	return vec2(r * cos(theta), r * sin(theta));
 }
 
-void update(uint seed, inout Reservoir reservoir, in float xi_weight, int index, int in_reservoir_m)
-{
-    reservoir.totalWeights = reservoir.totalWeights + xi_weight;
-    float r = GetRandomNumber(seed);
-    reservoir.M += in_reservoir_m;
-    if(r < (xi_weight / reservoir.totalWeights))
-    {
-        reservoir.index = index;
-    }
-}
-
-Reservoir combine_reservoirs_spatial_reuse(vec4 current_pixel_reservoir_data, inout uint seed, vec3 n, vec3 pos)
-{
-    const int NUM_SPATIAL_NEIGHBOURS = 5; // 5 spatial neighbouring including the current pixel
-    Reservoir reservoir;
-    reservoir.index = -1;
-    reservoir.W_y = 0.0;
-    reservoir.M = 0;
-    reservoir.totalWeights = 0.0;
-
-    Reservoir neighbouring_reservoirs[NUM_SPATIAL_NEIGHBOURS]; // We will find 4 neighbours and fill this array
-
-    // Init all reservoirs
-    for(int i = 0; i < NUM_SPATIAL_NEIGHBOURS; i++)
-    {
-        neighbouring_reservoirs[i].index = -1;
-        neighbouring_reservoirs[i].W_y = 0.0f;
-        neighbouring_reservoirs[i].M = 0;
-        neighbouring_reservoirs[i].totalWeights = 0.0f;
-    }
-
-    // current pixel reservoir
-    ivec2 current_pixel = ivec2(gl_GlobalInvocationID.xy);
-    neighbouring_reservoirs[0].index = int(current_pixel_reservoir_data.x); // Current pixel index
-    neighbouring_reservoirs[0].W_y = current_pixel_reservoir_data.y; // Current pixel weight
-    neighbouring_reservoirs[0].M = int(current_pixel_reservoir_data.z); // Current pixel M
-
-    for(uint i = 1; i < NUM_SPATIAL_NEIGHBOURS; i++)
-    {
-        vec2 rand = Hammersley(i, NUM_SPATIAL_NEIGHBOURS - 1);
-        vec2 random = GetRandomHashValue01(seed);
-        vec2 offset = DiskPoint(float(spatial_ubo.radius), random.x, random.y); // radius of 30px, as suggested by the paper
-
-        ivec2 sample_pixel = current_pixel + ivec2(offset);
-        ivec2 viewportSizeInt = ivec2(spatial_ubo.viewportSize);
-        sample_pixel = clamp(sample_pixel, ivec2(0), viewportSizeInt - ivec2(1));
-
-        neighbouring_reservoirs[i].index = int(texelFetch(temporal_pass_reservoirs, sample_pixel, 0).x);
-        neighbouring_reservoirs[i].W_y   = texelFetch(temporal_pass_reservoirs, sample_pixel, 0).y;
-        neighbouring_reservoirs[i].M     = min(int(texelFetch(temporal_pass_reservoirs, sample_pixel, 0).z), spatial_ubo.M); // 20 * int(current_pixel_reservoir_data.z)
-    }
-
-    // Update the reservoir using the neighbouring reservoirs
-    for(uint i = 0; i < NUM_SPATIAL_NEIGHBOURS; i++)
-    {
-        Light L = lightData.lights[neighbouring_reservoirs[i].index];
-
-        float dist = length(L.LightPosition.xyz - pos);
-        const vec3 LightDir = normalize(L.LightPosition.xyz - pos);
-        const float LightIntensity = 1000.0f * (1.0 / (dist * dist));
-
-        // Evaluate F(x) at the current pixel
-        float F_x = max(dot(n, LightDir), 0.0) * LightIntensity; // Simplied F(x) only doing diffuse
-
-        // Algorithm 4: Line: 4: p^q(r.y) * r.W * r.M
-        float w_i = F_x * neighbouring_reservoirs[i].W_y * neighbouring_reservoirs[i].M;
-
-        // Update the reservoir using current sample data
-        update(seed, reservoir, w_i, neighbouring_reservoirs[i].index, neighbouring_reservoirs[i].M);
-    }
-
-    return reservoir;
-}
-
 float inShadow(vec3 position, vec3 normal, float distToLight, vec3 lightDir)
 {
     rayQueryEXT rq;
@@ -209,6 +135,111 @@ float inShadow(vec3 position, vec3 normal, float distToLight, vec3 lightDir)
     return occluded ? 0.0 : 1.0;
 }
 
+void update(uint seed, inout Reservoir reservoir, in float xi_weight, int index, int in_reservoir_m)
+{
+    reservoir.totalWeights = reservoir.totalWeights + xi_weight;
+    float r = GetRandomNumber(seed);
+    reservoir.M += in_reservoir_m;
+    if(r < (xi_weight / reservoir.totalWeights))
+    {
+        reservoir.index = index;
+    }
+}
+
+Reservoir combine_reservoirs_spatial_reuse(vec4 current_pixel_reservoir_data, inout uint seed, vec3 n, vec3 pos, inout float m)
+{
+    const int NUM_SPATIAL_NEIGHBOURS = 5; // 5 spatial neighbouring including the current pixel
+    Reservoir reservoir;
+    reservoir.index = -1;
+    reservoir.W_y = 0.0;
+    reservoir.M = 0;
+    reservoir.totalWeights = 0.0;
+
+    Reservoir neighbouring_reservoirs[NUM_SPATIAL_NEIGHBOURS]; // We will find 4 neighbours and fill this array
+    vec3 neighbouring_positions[NUM_SPATIAL_NEIGHBOURS];
+    vec3 neighbouring_normals[NUM_SPATIAL_NEIGHBOURS];
+
+    // Init all reservoirs
+    for(int i = 0; i < NUM_SPATIAL_NEIGHBOURS; i++)
+    {
+        neighbouring_reservoirs[i].index = -1;
+        neighbouring_reservoirs[i].W_y = 0.0f;
+        neighbouring_reservoirs[i].M = 0;
+        neighbouring_reservoirs[i].totalWeights = 0.0f;
+        neighbouring_positions[i] = vec3(0.0);
+        neighbouring_normals[i] = vec3(0.0);
+    }
+
+    // current pixel reservoir
+    ivec2 current_pixel = ivec2(gl_GlobalInvocationID.xy);
+    neighbouring_reservoirs[0].index = int(current_pixel_reservoir_data.x); // Current pixel index
+    neighbouring_reservoirs[0].W_y = current_pixel_reservoir_data.y; // Current pixel weight
+    neighbouring_reservoirs[0].M = int(current_pixel_reservoir_data.z); // Current pixel M
+    neighbouring_positions[0] = pos;
+    neighbouring_normals[0] = n;
+
+    for(uint i = 1; i < NUM_SPATIAL_NEIGHBOURS; i++)
+    {
+        vec2 rand = Hammersley(i, NUM_SPATIAL_NEIGHBOURS - 1);
+        vec2 random = GetRandomHashValue01(seed);
+        vec2 offset = DiskPoint(float(spatial_ubo.radius), random.x, random.y); // radius of 30px, as suggested by the paper
+
+        ivec2 sample_pixel = current_pixel + ivec2(offset);
+        ivec2 viewportSizeInt = ivec2(spatial_ubo.viewportSize);
+        sample_pixel = clamp(sample_pixel, ivec2(0), viewportSizeInt - ivec2(1));
+
+        neighbouring_reservoirs[i].index = int(texelFetch(temporal_pass_reservoirs, sample_pixel, 0).x);
+        neighbouring_reservoirs[i].W_y   = texelFetch(temporal_pass_reservoirs, sample_pixel, 0).y;
+        neighbouring_reservoirs[i].M     = min(int(texelFetch(temporal_pass_reservoirs, sample_pixel, 0).z), spatial_ubo.M); // 20 * int(current_pixel_reservoir_data.z)
+        neighbouring_positions[i]        = texelFetch(g_buffer_world_position, sample_pixel, 0).xyz;
+        neighbouring_normals[i]          = texelFetch(g_buffer_normals, sample_pixel, 0).xyz * 2.0 - 1.0; // convert from 0-1 to -1-1 range
+    }
+
+    // Update the reservoir using the neighbouring reservoirs
+    for(uint i = 0; i < NUM_SPATIAL_NEIGHBOURS; i++)
+    {
+        Light L = lightData.lights[neighbouring_reservoirs[i].index];
+
+        float dist = length(L.LightPosition.xyz - pos);
+        const vec3 LightDir = normalize(L.LightPosition.xyz - pos);
+        const float LightIntensity = 1000.0f * (1.0 / (dist * dist));
+
+        // Evaluate F(x) at the current pixel
+        float F_x = max(dot(n, LightDir), 0.0) * LightIntensity; // Simplied F(x) only doing diffuse
+
+        // Algorithm 4: Line: 4: p^q(r.y) * r.W * r.M
+        float w_i = F_x > 0.0 ? F_x * neighbouring_reservoirs[i].W_y * neighbouring_reservoirs[i].M : 0.0;
+
+        // Update the reservoir using current sample data
+        update(seed, reservoir, w_i, neighbouring_reservoirs[i].index, neighbouring_reservoirs[i].M);
+    }
+
+
+    // The resampling process results in a final sample in the reservoir which can now be used.
+    Light L = lightData.lights[reservoir.index];
+    int z = 0;
+    for(uint i = 0; i < NUM_SPATIAL_NEIGHBOURS; i++)
+    {
+        float light_dist = length(L.LightPosition.xyz - neighbouring_positions[i]);
+        vec3 lighting_direction = normalize(L.LightPosition.xyz - neighbouring_positions[i]);
+        float attenuation = 1.0 / (light_dist * light_dist);
+        float light_intensity = 1000.0f * attenuation;
+
+        float visibility = inShadow(neighbouring_positions[i], neighbouring_normals[i], light_dist, lighting_direction);
+        float pixel_p_hat = max(dot(neighbouring_normals[i], lighting_direction), 0.0) * light_intensity * visibility;
+        if(pixel_p_hat > 0.0)
+        {
+            // Add the neighbouring pixels reservoir M to Z
+            z = z + neighbouring_reservoirs[i].M;
+        }
+    }
+
+    m = (z > 0) ? 1.0 / float(z) : 0.0;
+
+
+    return reservoir;
+}
+
 vec4 Spatial(vec3 n, vec3 pos, vec3 albedo)
 {
     uvec2 dispatchSize = uvec2(spatial_ubo.viewportSize / 8);
@@ -219,10 +250,22 @@ vec4 Spatial(vec3 n, vec3 pos, vec3 albedo)
     vec3 throughput = vec3(1.0);
     vec4 pixelReservoir = texelFetch(temporal_pass_reservoirs, ivec2(gl_GlobalInvocationID.xy), 0).rgba;
 
-    Reservoir reservoir = combine_reservoirs_spatial_reuse(pixelReservoir, seed, n, pos);
+    if(isnan(pixelReservoir.y))
+    {
+        return vec4(0., 1., 0.0, 1.0);
+    }
+
+    float m = 0.0;
+    Reservoir reservoir = combine_reservoirs_spatial_reuse(pixelReservoir, seed, n, pos, m);
 
     // The reservoir should now contain the new updated sample
     // Use the index from the reservoir to fetch the light data
+
+    bool isValidReservoir = reservoir.index >= 0;
+
+    if(!isValidReservoir) {
+        return vec4(1, 0, 0, 1); // No valid reservoir found, return empty
+    }
     Light L = lightData.lights[reservoir.index];
 
     // Compute lighting using this light source
@@ -234,8 +277,12 @@ vec4 Spatial(vec3 n, vec3 pos, vec3 albedo)
 
     float Visibility = inShadow(pos, n, dist, LightDir);
 
-    // Need to do Fx * Visibility when doing algorithm 6 with Z
-    reservoir.W_y = Fx > 0.0 ? (1.0 / Fx) * (1.0 / reservoir.M) * reservoir.totalWeights : 0.0;
+    // Algorithm 4
+    // reservoir.W_y = Fx > 0.0 ? (1.0 / Fx) * (1.0 / reservoir.M) * reservoir.totalWeights : 0.0;
+
+    // Algorithm 6:
+    Fx = Fx * Visibility; // Apply visibility to F(x)
+    reservoir.W_y = Fx > 0.0 ? (1.0 / Fx) * (m * reservoir.totalWeights) : 0.0;
 
     imageStore(reservoir_output_image, ivec2(gl_GlobalInvocationID.xy), vec4(reservoir.index, reservoir.W_y, reservoir.M, 0.0));
 
@@ -243,8 +290,8 @@ vec4 Spatial(vec3 n, vec3 pos, vec3 albedo)
     vec3 radiance = throughput * directLighting * reservoir.W_y * Visibility;
 
     return vec4(radiance, 1.0);
-}
 
+}
 
 void main() {
 
@@ -283,11 +330,11 @@ void main() {
 //        is_invalid = true;
 //    }
 //
-//    // float Visibility = CastShadowRay(pos, n, LightDir, dist - 0.001);
-//    vec3 directLighting = computeDirectLighting(world_position.xyz, world_normal.xyz, vec3(1,1,1), LightDir, intensity, L.LightColour.rgb);
+//    float Visibility = inShadow(world_position.xyz, world_normal.xyz, dist, LightDir);
+//    vec3 directLighting = albedo * Fx * L.LightColour.rgb;
 //    vec3 radiance = throughput * directLighting * reservoir_W_y;
 
     // radiance = is_invalid ? vec3(1, 0, 0) : radiance;
-    imageStore(shading_result_image, coords, vec4(radiance));
+    imageStore(shading_result_image, coords, vec4(radiance.rgb, 0.0));
 
 }

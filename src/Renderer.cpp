@@ -134,7 +134,7 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	m_CompositePass		= std::make_unique<Composite>(context, m_SpatialComputePass->GetShadingResult());
 
 	// Currently passing the spatial pass result to the composite to display, switch to RayPass to show initial candidates
-	m_PresentPass		= std::make_unique<PresentPass>(context, m_SpatialComputePass->GetRenderTarget(), m_CompositePass->GetRenderTarget());
+	m_PresentPass		= std::make_unique<PresentPass>(context, m_CandidatesPass->GetRenderTarget(), m_CompositePass->GetRenderTarget());
 
 	// @NOTE: The final reservoirs from spatial reuse are the ones which should be copied to temporal pass "previous frame"
 

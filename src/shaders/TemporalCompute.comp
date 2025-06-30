@@ -132,7 +132,7 @@ void update(uint seed, inout Reservoir reservoir, in float xi_weight, int index,
 
 // All these initial candidates used a uniform distribution i.e 1 / NUM_LIGHTS
 
-Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed, vec3 n, vec3 pos)
+Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed, vec3 n, vec3 pos, inout vec3 previous_pixel_position, inout vec3 previous_pixel_normal, inout int previous_pixel_reservoir_m)
 {
     // Init a reservoir with the current pixel reservoir data
     Reservoir reservoir;;
@@ -158,6 +158,7 @@ Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed,
     ivec2 previous_pixel = ivec2(current_pixel - (motion_vector * temp_ubo.viewportSize)); // motion_vector is difference between UV, we need it in pixels so multiply by viewportsize
     previous_pixel = clamp(previous_pixel, ivec2(0), ivec2(temp_ubo.viewportSize - vec2(1)));
 
+    // Init current and previous pixel reservoirs
     reservoirs[0].index = int(current_pixel_reservoir_data.x);
     reservoirs[0].W_y = current_pixel_reservoir_data.y;
     reservoirs[0].M = int(current_pixel_reservoir_data.z);
@@ -165,6 +166,11 @@ Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed,
     reservoirs[1].index = int(texelFetch(previous_frame_texture, previous_pixel, 0).x);
     reservoirs[1].W_y   = texelFetch(previous_frame_texture, previous_pixel, 0).y;
     reservoirs[1].M = min(int(texelFetch(previous_frame_texture, previous_pixel, 0).z), temp_ubo.M); // // Paper at the end suggests clamping M for temporal reuse
+
+    // Store previous pixel position and normal
+    previous_pixel_position    = texelFetch(g_buffer_world_position, previous_pixel, 0).xyz;
+    previous_pixel_normal      = texelFetch(g_buffer_normals, previous_pixel, 0).xyz * 2.0 - 1.0;
+    previous_pixel_reservoir_m = reservoirs[1].M;
 
     for(int i = 0; i < 2; i++) {
         Light L = lightData.lights[reservoirs[i].index];
@@ -177,7 +183,7 @@ Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed,
         float F_x = max(dot(n, LightDir), 0.0) * LightIntensity; // Simplied F(x) only doing diffuse
 
         // Algorithm 4: Line: 4: p^q(r.y) * r.W * r.M
-        float w_i = F_x * reservoirs[i].W_y * reservoirs[i].M;
+        float w_i = F_x > 0.0 ? F_x * reservoirs[i].W_y * reservoirs[i].M : 0.0;
 
         // Update the reservoir using current sample data
         update(seed, reservoir, w_i, reservoirs[i].index, reservoirs[i].M);
@@ -197,11 +203,36 @@ vec4 Temporal(vec3 n, vec3 pos)
     vec3 throughput = vec3(1.0);
     vec4 pixelReservoir = texelFetch(initial_candidates_texture, ivec2(gl_GlobalInvocationID.xy), 0).rgba; // (x = index, y = W_y, z = totalWeights, w = M)
 
-    Reservoir reservoir = combine_reservoirs(pixelReservoir, seed, n, pos);
+    // Store previous pixel normal + position to perform visibility testing
+    vec3 previous_pixel_normal = vec3(0.0);
+    vec3 previous_pixel_position = vec3(0.0);
+    int previous_pixel_reservoir_m = 0;
+
+    Reservoir reservoir = combine_reservoirs(pixelReservoir, seed, n, pos, previous_pixel_position, previous_pixel_normal, previous_pixel_reservoir_m);
 
     // The reservoir should now contain the new updated sample
     // Use the index from the reservoir to fetch the light data
     Light L = lightData.lights[reservoir.index];
+
+
+    // Algorithm 6
+    uint z = 0;
+    // Compute F(x) for previous pixel + visibility
+    vec3  previous_pixel_lighting_direction = normalize(L.LightPosition.xyz - previous_pixel_position);
+    float previous_pixel_light_dist         = length(L.LightPosition.xyz - previous_pixel_position);
+    float previous_pixel_light_intensity    = 1000.0f * (1.0 / (previous_pixel_light_dist * previous_pixel_light_dist));
+
+    // Cast the shadow ray
+    float previous_pixel_visibility = inShadow(previous_pixel_position, previous_pixel_normal, previous_pixel_light_dist, previous_pixel_lighting_direction);
+
+    // Compute f(x)
+    float previous_pixel_p_hat = max(dot(previous_pixel_normal, previous_pixel_lighting_direction), 0.0) * previous_pixel_light_intensity * previous_pixel_visibility; // F(x) for previous pixel
+    // if its not in shadow, add the previous pixels reservoir M to Z.
+    if(previous_pixel_p_hat > 0.0)
+    {
+        z = z + previous_pixel_reservoir_m;
+    }
+
 
     // Compute lighting using this light source
     vec3 LightDir = normalize(L.LightPosition.xyz - pos);
@@ -210,9 +241,22 @@ vec4 Temporal(vec3 n, vec3 pos)
     float LightIntensity = 1000.0f * att;
     float F_x = max(dot(n, LightDir), 0.0) * LightIntensity;
 
+    float current_pixel_visbility = inShadow(pos, n, dist, LightDir);
+    float current_pixel_p_hat = F_x * current_pixel_visbility;
+    if(current_pixel_p_hat > 0.0)
+    {
+        // add the current pixels reservoir M to Z
+        z = z + min(int(pixelReservoir.z), temp_ubo.M);
+    }
+
+    float m = (z > 0) ? 1.0 / float(z) : 0.0;
+
     // Algorithm 4: Line 6: Reservoir s: s.W = 1 / p^q(s.y) * ( 1 / s.M  * s.totalWeights )
-    // (1.0 / F_x) ist he reciprocal of the target function F(x) that PDF(X) approximates better with more candidates.
-    reservoir.W_y = F_x > 0.0 ? (1.0 / F_x) * (1.0 / reservoir.M) * reservoir.totalWeights : 0.0;
+    // (1.0 / F_x) is the reciprocal of the target function F(x) that PDF(X) approximates better with more candidates.
+    // reservoir.W_y = F_x > 0.0 ? (1.0 / F_x) * (1.0 / reservoir.M) * reservoir.totalWeights : 0.0;
+
+    // Algorithm 6:
+    reservoir.W_y = F_x > 0.0 ? (1.0 / F_x) * (m * reservoir.totalWeights) : 0.0;
 
     return vec4(reservoir.index, reservoir.W_y, reservoir.M, 0.0);
 }
@@ -226,5 +270,6 @@ void main() {
     vec4 world_normal   = texelFetch(g_buffer_normals, coords, 0) * 2.0 - 1.0;
 
     vec4 reservoir_out = Temporal(world_normal.xyz, world_position.xyz);
+
     imageStore(reservoir_output_image, coords, vec4(reservoir_out));
 }

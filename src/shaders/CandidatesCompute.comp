@@ -141,7 +141,7 @@ void RISReservoir(inout Reservoir reservoir, inout uint seed, vec3 pos, vec3 n, 
         float F_x = max(dot(n, light_dir), 0.0) * LightIntensity; // Simplied F(x) for weighting. Not sure if need to compute entir BRDF * cosine * ....?  // The target function F(x) that PDF(X) approximates better with more candidates. Using lambert cosine term but this can be other importance sampling methods
 
         // This is p^q(x_i) / p(x_i) where p^q(x_i) is the target function F_x and p(x_i) is the PDF of the uniform distribution which is 1 / NUM_LIGHTS. So we can compute the weight as F_x * rcpUniformDistributionWeight = F_x * (1 / NUM_LIGHTS) = F_x / NUM_LIGHTS
-        float xi_weight = rcpM * F_x * rcpUniformDistributionWeight; // Move 1.0 / M to here when computing weight as suggested
+        float xi_weight = F_x > 0.0 ? rcpM * F_x * rcpUniformDistributionWeight : 0.0; // Move 1.0 / M to here when computing weight as suggested
         update(seed, reservoir, xi_weight, randomLightIndex);
     }
 }
