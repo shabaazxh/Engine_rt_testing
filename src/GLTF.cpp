@@ -147,9 +147,16 @@ vk::GLTFModel vk::LoadGLTF(const Context& context, const std::string& filepath)
             // neeed to get other textures and multipliers
             const cgltf_pbr_metallic_roughness& pbr = material->pbr_metallic_roughness;
 
-            const std::string albedoPath = SetDirectory(filepath, pbr.base_color_texture.texture->image->uri);
+            std::string albedoPath = "";
+			if (pbr.base_color_texture.texture == NULL) {
+                char defaultRoughness[] = "default.jpg";
+				albedoPath = SetDirectory(filepath, defaultRoughness);
+			}
+			else
+			{
+				albedoPath = SetDirectory(filepath, pbr.base_color_texture.texture->image->uri);
+			}
             std::string metallicRoughness = "";
-
             if (pbr.metallic_roughness_texture.texture == NULL) {
                 char defaultRoughness[] = "defaultRoughness.jpg"; // this JPG needs to be copied into each mesh dir e.g. Sponza/sponza.gltf, Sponza directory needs a copy
                 metallicRoughness = SetDirectory(filepath, defaultRoughness);

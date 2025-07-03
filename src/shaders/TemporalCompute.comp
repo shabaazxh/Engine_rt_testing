@@ -105,25 +105,20 @@ struct Reservoir
 {
     int index;
     float W_y;
-    float totalWeights;
+    float W_sum;
     int M;
 };
 
 void update(uint seed, inout Reservoir reservoir, in float xi_weight, int index, int in_reservoir_m)
 {
-    reservoir.totalWeights = reservoir.totalWeights + xi_weight;
+    reservoir.W_sum = reservoir.W_sum + xi_weight;
     float r = GetRandomNumber(seed);
-    reservoir.M += in_reservoir_m;
-    if(r < (xi_weight / reservoir.totalWeights))
+    // reservoir.M += in_reservoir_m;
+    if(r < (xi_weight / reservoir.W_sum))
     {
         reservoir.index = index;
     }
 }
-
-// Need to take the current pixel, conver it to UV, then back project it to World , I have the world position from the hit position already
-// Then use the previous frames projection * view matrices to reproject it back to UV
-// Then sample the previous frame image to get the current pixels reservoir but in the previous frame
-// If we have motion vectors, computed we can compute the motion and subtract it from currentUV to get previousUV
 
 // @NOTE: Tip 3.4: Use 1 / M weights if and only if all inputs weights are identically distributed
 // If initial candidates have different PDFs, such as when reusing across pixels. When reusing
@@ -132,22 +127,22 @@ void update(uint seed, inout Reservoir reservoir, in float xi_weight, int index,
 
 // All these initial candidates used a uniform distribution i.e 1 / NUM_LIGHTS
 
-Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed, vec3 n, vec3 pos, inout vec3 previous_pixel_position, inout vec3 previous_pixel_normal, inout int previous_pixel_reservoir_m)
+Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed, vec3 n, vec3 pos, inout vec3 previous_pixel_position, inout vec3 previous_pixel_normal, inout int previous_pixel_reservoir_m, inout bool isValidHistory)
 {
     // Init a reservoir with the current pixel reservoir data
     Reservoir reservoir;;
     reservoir.index = -1;
     reservoir.W_y = 0.0;
     reservoir.M = 0; // Number of candidates used during the initial candidates phase
-    reservoir.totalWeights = 0.0;
+    reservoir.W_sum = 0.0;
 
     // This will hold the two reservoirs, one for the current pixel and one for the previous frame pixel
     Reservoir reservoirs[2];
     for(int i = 0; i < 2; i++) {
         reservoirs[i].index = -1;
         reservoirs[i].W_y = 0.0;
-        reservoirs[i].M = 0; // Number of candidates used during the initial candidates phase
-        reservoirs[i].totalWeights = 0.0;
+        reservoirs[i].M = 0;
+        reservoirs[i].W_sum = 0.0;
     }
 
     // Get the motion vector for the current pixel
@@ -155,26 +150,37 @@ Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed,
 
     // Get the previous frame pixel position by subtracting the motion vector from the current pixel position
     ivec2 current_pixel = ivec2(gl_GlobalInvocationID.xy);
-    ivec2 previous_pixel = ivec2(current_pixel - (motion_vector * temp_ubo.viewportSize)); // motion_vector is difference between UV, we need it in pixels so multiply by viewportsize
-    previous_pixel = clamp(previous_pixel, ivec2(0), ivec2(temp_ubo.viewportSize - vec2(1)));
+    ivec2 previous_pixel = ivec2(current_pixel + (motion_vector * temp_ubo.viewportSize)); // motion_vector is difference between UV, we need it in pixels so multiply by viewportsize
+    // previous_pixel = clamp(previous_pixel, ivec2(0), ivec2(temp_ubo.viewportSize - vec2(1)));
 
-    // Init current and previous pixel reservoirs
-    reservoirs[0].index = int(current_pixel_reservoir_data.x);
-    reservoirs[0].W_y = current_pixel_reservoir_data.y;
-    reservoirs[0].M = int(current_pixel_reservoir_data.z);
-
-    reservoirs[1].index = int(texelFetch(previous_frame_texture, previous_pixel, 0).x);
-    reservoirs[1].W_y   = texelFetch(previous_frame_texture, previous_pixel, 0).y;
-    reservoirs[1].M = min(int(texelFetch(previous_frame_texture, previous_pixel, 0).z), temp_ubo.M); // // Paper at the end suggests clamping M for temporal reuse
-
+    // @TODO: This is currently just using the current_pixel to sample from previous texture for testing. It should be using previous_pixel but this is not working correctly.
     // Store previous pixel position and normal
-    previous_pixel_position    = texelFetch(g_buffer_world_position, previous_pixel, 0).xyz;
-    previous_pixel_normal      = texelFetch(g_buffer_normals, previous_pixel, 0).xyz * 2.0 - 1.0;
-    previous_pixel_reservoir_m = reservoirs[1].M;
+    previous_pixel_position    = texelFetch(g_buffer_world_position, current_pixel, 0).xyz;
+    previous_pixel_normal      = texelFetch(g_buffer_normals, current_pixel, 0).xyz * 2.0 - 1.0;
+
+    // Init reservoir with currnet pixel frame data
+    reservoirs[0].index = int(current_pixel_reservoir_data.x); // x = stores index into light array
+    reservoirs[0].W_y   = current_pixel_reservoir_data.y;      // y = reservoir W_y weight
+    reservoirs[0].M     = int(current_pixel_reservoir_data.z); // z = reservoir M
+
+    // isValidHistory = dot(previous_pixel_normal, n) >= 0.99;
+
+    if(isValidHistory) {
+        // Init reservoir with previous frame pixel data
+        reservoirs[1].index = int(texelFetch(previous_frame_texture, current_pixel, 0).x);
+        reservoirs[1].W_y   = texelFetch(previous_frame_texture, current_pixel, 0).y;
+        reservoirs[1].M = min(int(texelFetch(previous_frame_texture, current_pixel, 0).z), 20 * reservoirs[0].M); // // Paper at the end suggests clamping M for temporal reuse
+        previous_pixel_reservoir_m = reservoirs[1].M;
+    }
 
     for(int i = 0; i < 2; i++) {
-        Light L = lightData.lights[reservoirs[i].index];
 
+//        if(reservoirs[i].index < 0) {
+//            // If the reservoir index is -1, its an invalid sample, skip it
+//            continue;
+//        }
+
+        Light L = lightData.lights[reservoirs[i].index];
         float dist = length(L.LightPosition.xyz - pos);
         const vec3 LightDir = normalize(L.LightPosition.xyz - pos);
         const float LightIntensity = 1000.0f * (1.0 / (dist * dist));
@@ -189,74 +195,84 @@ Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed,
         update(seed, reservoir, w_i, reservoirs[i].index, reservoirs[i].M);
     }
 
+    // Algorithm 6: Line 4.
+    for(uint i = 0; i < 2; i++)
+    {
+        reservoir.M += reservoirs[i].M;
+    }
+
     return reservoir;
 }
 
 
 vec4 Temporal(vec3 n, vec3 pos)
 {
-    uvec2 dispatchSize = uvec2(temp_ubo.viewportSize / 8);
-    uint launchWidth = dispatchSize.x * gl_WorkGroupSize.x;
-    uint seed = uint(gl_GlobalInvocationID.y * launchWidth) + gl_GlobalInvocationID.x;
+    uvec2 dispatch_size = uvec2(temp_ubo.viewportSize / 8);
+    uint launch_width = dispatch_size.x * gl_WorkGroupSize.x;
+    uint seed = uint(gl_GlobalInvocationID.y * launch_width) + gl_GlobalInvocationID.x;
     seed *= temp_ubo.frameIndex;
+    // seed = WangHash(seed);
 
     vec3 throughput = vec3(1.0);
-    vec4 pixelReservoir = texelFetch(initial_candidates_texture, ivec2(gl_GlobalInvocationID.xy), 0).rgba; // (x = index, y = W_y, z = totalWeights, w = M)
+    vec4 curr_reservoir = texelFetch(initial_candidates_texture, ivec2(gl_GlobalInvocationID.xy), 0).rgba;
 
     // Store previous pixel normal + position to perform visibility testing
     vec3 previous_pixel_normal = vec3(0.0);
     vec3 previous_pixel_position = vec3(0.0);
-    int previous_pixel_reservoir_m = 0;
+    int  previous_pixel_reservoir_m = 0;
 
-    Reservoir reservoir = combine_reservoirs(pixelReservoir, seed, n, pos, previous_pixel_position, previous_pixel_normal, previous_pixel_reservoir_m);
+    // Flag to ensure history is valid before using it
+    bool isValidHistory = true;
+    // Combine the reservoirs of the current and previous pixel
+    Reservoir reservoir = combine_reservoirs(curr_reservoir, seed, n, pos, previous_pixel_position, previous_pixel_normal, previous_pixel_reservoir_m, isValidHistory);
 
-    // The reservoir should now contain the new updated sample
+    // If the reservoir index is -1, no light was selected, return early
+    if(reservoir.index < 0) {
+        return vec4(-1.0, 0.0, 0.0, 0.0);
+    }
+
+    // The reservoir should now contain the new updated sample and it should be valid
     // Use the index from the reservoir to fetch the light data
     Light L = lightData.lights[reservoir.index];
 
-
-    // Algorithm 6
+    // Algorithm 6: Unbiased combination of multiple reservoirs
     uint z = 0;
     // Compute F(x) for previous pixel + visibility
     vec3  previous_pixel_lighting_direction = normalize(L.LightPosition.xyz - previous_pixel_position);
     float previous_pixel_light_dist         = length(L.LightPosition.xyz - previous_pixel_position);
     float previous_pixel_light_intensity    = 1000.0f * (1.0 / (previous_pixel_light_dist * previous_pixel_light_dist));
 
-    // Cast the shadow ray
-    float previous_pixel_visibility = inShadow(previous_pixel_position, previous_pixel_normal, previous_pixel_light_dist, previous_pixel_lighting_direction);
+    // If the history sample is valid, compute f(x) to check visbility
+    if(isValidHistory) {
+        // Cast the shadow ray
+        float previous_pixel_visibility = inShadow(previous_pixel_position, previous_pixel_normal, previous_pixel_light_dist, previous_pixel_lighting_direction);
 
-    // Compute f(x)
-    float previous_pixel_p_hat = max(dot(previous_pixel_normal, previous_pixel_lighting_direction), 0.0) * previous_pixel_light_intensity * previous_pixel_visibility; // F(x) for previous pixel
-    // if its not in shadow, add the previous pixels reservoir M to Z.
-    if(previous_pixel_p_hat > 0.0)
-    {
-        z = z + previous_pixel_reservoir_m;
+        // Compute f(x) for the previous pixel
+        float previous_pixel_p_hat = max(dot(previous_pixel_normal, previous_pixel_lighting_direction), 0.0) * previous_pixel_light_intensity * previous_pixel_visibility;
+
+        // If its not in shadow, add the previous pixels reservoir M to Z.
+        z = previous_pixel_p_hat > 0.0 ? z + previous_pixel_reservoir_m : z;
     }
 
+    // Compute visibility using the new reservoir index but for the current pixel
+    vec3  current_pixel_light_direction = normalize(L.LightPosition.xyz - pos);
+    float current_pixel_light_dist = length(L.LightPosition.xyz - pos);
+    float current_pixel_light_intensity = 1000.0f * (1.0 / (current_pixel_light_dist * current_pixel_light_dist));
 
-    // Compute lighting using this light source
-    vec3 LightDir = normalize(L.LightPosition.xyz - pos);
-    float dist = length(L.LightPosition.xyz - pos);
-    float att = 1.0 / (dist * dist);
-    float LightIntensity = 1000.0f * att;
-    float F_x = max(dot(n, LightDir), 0.0) * LightIntensity;
+    float current_pixel_visibility = inShadow(pos, n, current_pixel_light_dist, current_pixel_light_direction);
+    float current_pixel_p_hat = max(dot(n, current_pixel_light_direction), 0.0) * current_pixel_light_intensity * current_pixel_visibility;
 
-    float current_pixel_visbility = inShadow(pos, n, dist, LightDir);
-    float current_pixel_p_hat = F_x * current_pixel_visbility;
-    if(current_pixel_p_hat > 0.0)
-    {
-        // add the current pixels reservoir M to Z
-        z = z + min(int(pixelReservoir.z), temp_ubo.M);
-    }
+    z = current_pixel_p_hat > 0.0 ? z + uint(curr_reservoir.z) : z;
 
     float m = (z > 0) ? 1.0 / float(z) : 0.0;
 
-    // Algorithm 4: Line 6: Reservoir s: s.W = 1 / p^q(s.y) * ( 1 / s.M  * s.totalWeights )
+    // Algorithm 4: Line 6: Reservoir s: s.W = 1 / p^q(s.y) * ( 1 / s.M  * s.W_sum )
     // (1.0 / F_x) is the reciprocal of the target function F(x) that PDF(X) approximates better with more candidates.
-    // reservoir.W_y = F_x > 0.0 ? (1.0 / F_x) * (1.0 / reservoir.M) * reservoir.totalWeights : 0.0;
+    // reservoir.W_y = F_x > 0.0 ? (1.0 / F_x) * (1.0 / reservoir.M) * reservoir.W_sum : 0.0;
 
     // Algorithm 6:
-    reservoir.W_y = F_x > 0.0 ? (1.0 / F_x) * (m * reservoir.totalWeights) : 0.0;
+    float F_x = max(dot(n, current_pixel_light_direction), 0.0) * current_pixel_light_intensity;
+    reservoir.W_y = F_x > 0.0 ? (1.0 / F_x) * (m * reservoir.W_sum) : 0.0;
 
     return vec4(reservoir.index, reservoir.W_y, reservoir.M, 0.0);
 }

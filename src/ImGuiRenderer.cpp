@@ -73,7 +73,7 @@ void vk::ImGuiRenderer::Update(const std::shared_ptr<Scene>& scene, const std::s
 	ImGui::SliderInt("Candidate M: ", &CandidatesPassData.M, 1, 100);
     ImGui::SliderInt("Temporal M: ", &TemporalPassData.M, 1, 100);
 	ImGui::SliderInt("Spatial M: ", &SpatialPassData.M, 1, 100);
-	ImGui::SliderInt("Spatial Radius: ", &SpatialPassData.radius, 1, 100);
+	ImGui::SliderInt("Spatial Radius: ", &SpatialPassData.radius, 0, 100);
 
     if (ImGui::CollapsingHeader("Directional Light"))
     {

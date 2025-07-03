@@ -11,8 +11,8 @@ namespace
 	// This should be placed elsewhere. Put here for simplicity while testing
 	// Don't really need to define these, can pass the pos, dir, up directly to camera constructor
 	// Camera default values
-	constexpr glm::vec3 cameraPos = glm::vec3(1.0f, 1.0f, 1.0f); //1.0f, 2.0f, -24.0f
-	constexpr glm::vec3 cameraDir = glm::vec3(1.0f, 1.0f, -1.0f);
+	constexpr glm::vec3 cameraPos = glm::vec3(-567.0f, 100.0f, -69.0f); //1.0f, 2.0f, -24.0f
+	constexpr glm::vec3 cameraDir = glm::vec3(1.0f, 20.0f, -1.0f);
 	constexpr glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0);
 }
 
@@ -74,7 +74,7 @@ vk::Renderer::Renderer(Context& context) : context{context}
 	// Add a directional light source defined earlier
 	// Sponza is huge ( physical size not disc space ) when loaded
 	// so i reduced it significantly when rendering meshes (see DrawGLTF) in Scene.cpp
-	auto gltf = vk::LoadGLTF(context, "assets/GLTF/Sponza/Sponza.gltf");
+	auto gltf = vk::LoadGLTF(context, "assets/GLTF/Sponza/Sponza.gltf"); // assets/GLTF/cornell/cornell_pbr_no_sphere.gltf
 
 	m_scene = std::make_shared<Scene>(context, m_materialManager);
 

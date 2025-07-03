@@ -39,10 +39,11 @@ vec2 world_to_screen_space_uv(vec3 world_pos, mat4 projection, mat4 view)
 void main()
 {
 	vec3 current_world_pos = texture(WorldHitPositions, uv).xyz;
+
+	vec2 curr_uv = world_to_screen_space_uv(current_world_pos, current_camera_transform.projection, current_camera_transform.view);
 	vec2 prev_uv = world_to_screen_space_uv(current_world_pos, previous_camera_transform.projection, previous_camera_transform.view);
 
-	vec2 curr_uv = uv;
-	vec2 motion_vector = curr_uv - prev_uv;
+	vec2 motion_vector = prev_uv - curr_uv;
 
 	// @TODO: should store this in a RG texture not RGBA
 	fragColor = vec4(motion_vector, 0.0, 1.0);
