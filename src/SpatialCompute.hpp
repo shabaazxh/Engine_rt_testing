@@ -14,7 +14,7 @@ namespace vk
 	class SpatialCompute
 	{
 	public:
-		explicit SpatialCompute(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initial_candidates, Image& hit_world_positions, Image& hit_normals, Image& hit_albedo, Image& temporal_pass_reservoirs, const GBuffer::GBufferMRT& gbufferMRT);
+		explicit SpatialCompute(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initial_candidates, Image& temporal_pass_reservoirs, const GBuffer::GBufferMRT& gbufferMRT);
 		~SpatialCompute();
 
 		void Execute(VkCommandBuffer cmd);
@@ -35,9 +35,6 @@ namespace vk
 
 		Image& initial_candidates;
 		Image& temporal_pass_reservoirs;
-		Image& hit_world_positions;
-		Image& hit_normals;
-		Image& hit_albedo;
 		const GBuffer::GBufferMRT& gbufferMRT;
 
 		VkPipeline m_Pipeline;

@@ -11,10 +11,10 @@ namespace vk
 	{
 	public:
 		History(Context& context, const Image& renderedImage);
+		~History();
 		void Execute(VkCommandBuffer cmd);
 		Image& GetRenderTarget() { return m_RenderTarget; }
 
-		void Destroy();
 		void Update();
 		void Resize();
 	private:

@@ -34,6 +34,18 @@ vk::History::History(Context& context, const Image& renderedImage) : context{con
 	CreatePipeline();
 }
 
+vk::History::~History()
+{
+	for (auto& buffer : m_rtxSettingsUBO)
+	{
+		buffer.Destroy(context.device);
+	}
+
+	m_RenderTarget.Destroy(context.device);
+	vkDestroyPipeline(context.device, m_pipeline, nullptr);
+	vkDestroyPipelineLayout(context.device, m_pipelineLayout, nullptr);
+	vkDestroyDescriptorSetLayout(context.device, m_descriptorSetLayout, nullptr);
+}
 
 void vk::History::Update()
 {
@@ -74,6 +86,13 @@ void vk::History::Resize()
 		VK_IMAGE_ASPECT_COLOR_BIT,
 		1
 	);
+
+
+	ExecuteSingleTimeCommands(context, [&](VkCommandBuffer cmd) {
+
+		ImageTransition(cmd, m_RenderTarget.image, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+
+	});
 
 	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
 	{
@@ -174,19 +193,6 @@ void vk::History::Execute(VkCommandBuffer cmd)
 #ifdef _DEBUG
 	EndRenderPassLabel(cmd);
 #endif
-}
-
-void vk::History::Destroy()
-{
-	for (auto& buffer : m_rtxSettingsUBO)
-	{
-		buffer.Destroy(context.device);
-	}
-
-	m_RenderTarget.Destroy(context.device);
-	vkDestroyPipeline(context.device, m_pipeline, nullptr);
-	vkDestroyPipelineLayout(context.device, m_pipelineLayout, nullptr);
-	vkDestroyDescriptorSetLayout(context.device, m_descriptorSetLayout, nullptr);
 }
 
 void vk::History::CreatePipeline()

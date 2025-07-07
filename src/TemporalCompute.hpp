@@ -14,7 +14,7 @@ namespace vk
 	class TemporalCompute
 	{
 	public:
-		explicit TemporalCompute(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initial_candidates, Image& hit_world_positions, Image& hit_normals, Image& motion_vectors, const GBuffer::GBufferMRT& gbufferMRT);
+		explicit TemporalCompute(Context& context, std::shared_ptr<Scene>& scene, std::shared_ptr<Camera>& camera, Image& initial_candidates, Image& motion_vectors, const GBuffer::GBufferMRT& gbufferMRT);
 		~TemporalCompute();
 
 		void Execute(VkCommandBuffer cmd);
@@ -35,8 +35,6 @@ namespace vk
 		Image m_PreviousImage;
 		Image& initial_candidates;
 		Image& motion_vectors;
-		Image& hit_world_positions;
-		Image& hit_normals;
 		const GBuffer::GBufferMRT& gbufferMRT;
 
 		VkPipeline m_Pipeline;

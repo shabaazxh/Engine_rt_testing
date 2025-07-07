@@ -61,14 +61,11 @@ namespace vk
 
 		std::shared_ptr<Scene> m_scene;
 
-		std::unique_ptr<DepthPrepass>     m_DepthPrepass;
-		std::unique_ptr<ForwardPass>	  m_ForwardPass;
 		std::unique_ptr<GBuffer>	      m_GBuffer;
 		std::unique_ptr<Candidates>       m_CandidatesPass;
 		std::unique_ptr<ShadingPass>      m_ShadingPass;
 		std::unique_ptr<Composite>        m_CompositePass;
 		std::unique_ptr<PresentPass>	  m_PresentPass;
-		std::unique_ptr<RayPass>          m_RayPass;
 		std::unique_ptr<MotionVectors>    m_MotionVectorsPass;
 		std::unique_ptr<TemporalCompute>  m_TemporalComputePass;
 		std::unique_ptr<SpatialCompute>   m_SpatialComputePass;

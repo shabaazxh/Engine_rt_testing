@@ -115,19 +115,14 @@ vk::Renderer::Renderer(Context& context) : context{context}
 
 	m_CandidatesPass = std::make_unique<Candidates>(context, m_scene, m_camera, m_GBuffer->GetGBufferMRT());
 
-	// Create the initial candidates using RIS
-	m_RayPass		    = std::make_unique<RayPass>(context, m_scene, m_camera);
-
 	m_MotionVectorsPass = std::make_unique<MotionVectors>(context, m_camera, m_GBuffer->GetGBufferMRT().WorldPositions);
 
-	m_TemporalComputePass = std::make_unique<TemporalCompute>(context, m_scene, m_camera, m_CandidatesPass->GetInitialCandidates(), m_RayPass->GetWorldHitPositions(), m_RayPass->GetHitNormals(), m_MotionVectorsPass->GetRenderTarget(), m_GBuffer->GetGBufferMRT());
+	m_TemporalComputePass = std::make_unique<TemporalCompute>(context, m_scene, m_camera, m_CandidatesPass->GetInitialCandidates(), m_MotionVectorsPass->GetRenderTarget(), m_GBuffer->GetGBufferMRT());
 
 	// Spatial pass will take in the temporal resampled reservoir results and spatially reuse to resample
-	m_SpatialComputePass = std::make_unique<SpatialCompute>(context, m_scene, m_camera, m_CandidatesPass->GetInitialCandidates(), m_RayPass->GetWorldHitPositions(), m_RayPass->GetHitNormals(), m_RayPass->GetAlbedo(), m_TemporalComputePass->GetRenderTarget(), m_GBuffer->GetGBufferMRT());
-
+	m_SpatialComputePass = std::make_unique<SpatialCompute>(context, m_scene, m_camera, m_CandidatesPass->GetInitialCandidates(), m_TemporalComputePass->GetRenderTarget(), m_GBuffer->GetGBufferMRT());
 
 	m_ShadingPass = std::make_unique<ShadingPass>(context, m_scene, m_camera, m_GBuffer->GetGBufferMRT(), m_CandidatesPass->GetInitialCandidates(), m_TemporalComputePass->GetRenderTarget(), m_SpatialComputePass->GetRenderTarget());
-
 
 	// Whichever mode you select in the shading pass, will be the mode that is then accumualated in the history pass
 	m_HistoryPass = std::make_unique<History>(context, m_ShadingPass->GetRenderTarget());
@@ -146,19 +141,17 @@ void vk::Renderer::Destroy()
 	vkDeviceWaitIdle(context.device);
 
 	ImGuiRenderer::Shutdown(context);
-	m_DepthPrepass.reset();
 	m_GBuffer.reset();
 	m_ShadingPass.reset();
 	m_CandidatesPass.reset();
 	m_MotionVectorsPass.reset();
 	m_TemporalComputePass.reset();
 	m_SpatialComputePass.reset();
-	m_ForwardPass.reset();
+	m_HistoryPass.reset();
 	m_CompositePass.reset();
 	m_PresentPass.reset();
 	m_camera.reset();
 	m_scene->Destroy();
-	m_RayPass.reset();
 
 	vkDestroySampler(context.device, repeatSamplerAniso, nullptr);
 	vkDestroySampler(context.device, repeatSampler, nullptr);
@@ -286,9 +279,13 @@ void vk::Renderer::Render(double deltaTime)
 	{
 		// Recreate swapchain
 		context.RecreateSwapchain();
-		m_RayPass->Resize();
-		m_DepthPrepass->Resize();
-		m_ForwardPass->Resize();
+		m_GBuffer->Resize();
+		m_CandidatesPass->Resize();
+		m_MotionVectorsPass->Resize();
+		m_TemporalComputePass->Resize();
+		m_SpatialComputePass->Resize();
+		m_ShadingPass->Resize();
+		m_HistoryPass->Resize();
 		m_CompositePass->Resize();
 		m_PresentPass->Resize();
 	}
@@ -377,9 +374,13 @@ void vk::Renderer::Present(uint32_t imageIndex)
 	{
 		// Recreate the swapchain
 		context.RecreateSwapchain();
-		m_RayPass->Resize();
-		m_DepthPrepass->Resize();
-		m_ForwardPass->Resize();
+		m_GBuffer->Resize();
+		m_CandidatesPass->Resize();
+		m_MotionVectorsPass->Resize();
+		m_TemporalComputePass->Resize();
+		m_SpatialComputePass->Resize();
+		m_ShadingPass->Resize();
+		m_HistoryPass->Resize();
 		m_CompositePass->Resize();
 		m_PresentPass->Resize();
 	}
@@ -392,15 +393,13 @@ void vk::Renderer::Update(double deltaTime)
 	m_camera->Update(context.window, context.extent.width, context.extent.height, deltaTime);
 	m_scene->Update(context.window);
 
+	// Update passes
 	ImGuiRenderer::Update(m_scene, m_camera);
 	m_CandidatesPass->Update();
-	m_RayPass->Update();
 	m_TemporalComputePass->Update();
 	m_SpatialComputePass->Update();
 	m_ShadingPass->Update();
 	m_HistoryPass->Update();
-	// Update passes
-	m_ForwardPass->Update();
 	m_PresentPass->Update();
 }
 

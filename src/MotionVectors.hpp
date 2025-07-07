@@ -15,7 +15,7 @@ namespace vk
 	class MotionVectors
 	{
 	public:
-		MotionVectors(Context& context, std::shared_ptr<Camera> camera, Image& WorldHitPositions);
+		MotionVectors(Context& context, std::shared_ptr<Camera> camera, Image& GBufferWorldPosition);
 		~MotionVectors();
 		void Update();
 		void Resize();
@@ -31,7 +31,7 @@ namespace vk
 	private:
 		Context& context;
 		std::shared_ptr<Camera> camera;
-		Image& WorldHitPositions;
+		Image& GBufferWorldPosition;
 
 		uint32_t m_width;
 		uint32_t m_height;

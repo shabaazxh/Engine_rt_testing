@@ -3,8 +3,8 @@
 #include "Pipeline.hpp"
 #include "RenderPass.hpp"
 
-vk::MotionVectors::MotionVectors(Context& context, std::shared_ptr<Camera> camera, Image& WorldHitPositions)
-	: context{context}, camera{camera}, WorldHitPositions{ WorldHitPositions }
+vk::MotionVectors::MotionVectors(Context& context, std::shared_ptr<Camera> camera, Image& GBufferWorldPosition)
+	: context{context}, camera{camera}, GBufferWorldPosition{ GBufferWorldPosition }
 {
 	m_width = context.extent.width;
 	m_height = context.extent.height;
@@ -57,8 +57,35 @@ void vk::MotionVectors::Update()
 
 void vk::MotionVectors::Resize()
 {
+	m_RenderTarget.Destroy(context.device);
+	vkDestroyFramebuffer(context.device, m_Framebuffer, nullptr);
+
 	m_width = context.extent.width;
 	m_height = context.extent.height;
+
+	m_RenderTarget = CreateImageTexture2D(
+		"MotionVectors_RT",
+		context,
+		m_width,
+		m_height,
+		VK_FORMAT_R16G16B16A16_SFLOAT,
+		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		VK_IMAGE_ASPECT_COLOR_BIT,
+		1
+	);
+
+	CreateFramebuffer();
+
+	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		VkDescriptorImageInfo imgInfo = {
+			.sampler = clampToEdgeSamplerAniso,
+			.imageView = GBufferWorldPosition.imageView,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+
+		UpdateDescriptorSet(context, 0, imgInfo, m_DescriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	}
 }
 
 void vk::MotionVectors::Execute(VkCommandBuffer cmd)
@@ -181,7 +208,7 @@ void vk::MotionVectors::CreateDescriptors()
 	{
 		VkDescriptorImageInfo imgInfo = {
 			.sampler = clampToEdgeSamplerAniso,
-			.imageView = WorldHitPositions.imageView,
+			.imageView = GBufferWorldPosition.imageView,
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		};
 
