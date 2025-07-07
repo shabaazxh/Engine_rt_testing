@@ -169,7 +169,7 @@ Reservoir combine_reservoirs(vec4 current_pixel_reservoir_data, inout uint seed,
         // Init reservoir with previous frame pixel data
         reservoirs[1].index = int(texelFetch(previous_frame_texture, current_pixel, 0).x);
         reservoirs[1].W_y   = texelFetch(previous_frame_texture, current_pixel, 0).y;
-        reservoirs[1].M = min(int(texelFetch(previous_frame_texture, current_pixel, 0).z), 20 * reservoirs[0].M); // // Paper at the end suggests clamping M for temporal reuse
+        reservoirs[1].M = min(int(texelFetch(previous_frame_texture, current_pixel, 0).z), 20 * reservoirs[0].M); // Paper at the end suggests clamping M for temporal reuse
         previous_pixel_reservoir_m = reservoirs[1].M;
     }
 
@@ -211,7 +211,6 @@ vec4 Temporal(vec3 n, vec3 pos)
     uint launch_width = dispatch_size.x * gl_WorkGroupSize.x;
     uint seed = uint(gl_GlobalInvocationID.y * launch_width) + gl_GlobalInvocationID.x;
     seed *= temp_ubo.frameIndex;
-    // seed = WangHash(seed);
 
     vec3 throughput = vec3(1.0);
     vec4 curr_reservoir = texelFetch(initial_candidates_texture, ivec2(gl_GlobalInvocationID.xy), 0).rgba;

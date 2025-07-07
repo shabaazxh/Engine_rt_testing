@@ -66,8 +66,9 @@ void vk::ImGuiRenderer::Update(const std::shared_ptr<Scene>& scene, const std::s
     );
 
 
+	ImGui::SliderInt("Reservoir: ", &ShadingPassData.reservoir_pass, 0, 2);
     ImGui::SliderInt("Bounces: ", &rtxSettings.bounces, 0, 10);
-    ImGui::SliderInt("PastFrames: ", &rtxSettings.numPastFrames, 0, 10);
+    ImGui::SliderInt("PastFrames: ", &rtxSettings.numPastFrames, 0, 1000);
 
     ImGui::SeparatorText("other");
 	ImGui::SliderInt("Candidate M: ", &CandidatesPassData.M, 1, 100);

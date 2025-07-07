@@ -62,6 +62,13 @@
       <Outputs>../../assets/shaders/MotionVectors.frag.spv</Outputs>
       <Message>GLSLC: [FRAG] '%(Filename)%(Extension)'</Message>
     </CustomBuild>
+    <CustomBuild Include="..\..\src\shaders\ShadingPass.comp">
+      <FileType>Document</FileType>
+      <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")
+"$(SolutionDir)/third_party/shaderc/win-x86_64/glslc.exe" -O --target-env=vulkan1.2 -g -O0 --target-env=vulkan1.3 -o "$(SolutionDir)/assets/shaders/%(Filename)%(Extension).spv" "%(Identity)"</Command>
+      <Outputs>../../assets/shaders/ShadingPass.comp.spv</Outputs>
+      <Message>GLSLC: [COMP] '%(Filename)%(Extension)'</Message>
+    </CustomBuild>
     <CustomBuild Include="..\..\src\shaders\Spatial.rchit">
       <FileType>Document</FileType>
       <Command>IF NOT EXIST "$(SolutionDir)\assets\shaders" (mkdir "$(SolutionDir)\assets\shaders")

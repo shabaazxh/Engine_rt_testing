@@ -13,17 +13,21 @@ layout(set = 0, binding = 2) uniform RTXSettings
 
 
 void main() {
-
-    vec2 resolution = vec2(1280, 720);
     ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
 
     vec4 newColour = texelFetch(renderedScene, coords, 0);
-
     vec4 history = imageLoad(temporalAccumImage, coords);
 
-    int cappedFrameIndex = min(rtx.frameIndex, rtx.numPastFrames);
-    float alpha = (rtx.frameIndex <= 1) ? 1.0 : 1.0 / float(rtx.frameIndex); // frameIndex is number of frames accumulated frames since pressing accumulation //            0.1
-    vec4 combined = mix(history, newColour, alpha);
+    if(rtx.frameIndex > rtx.numPastFrames)
+        return;
 
-    imageStore(temporalAccumImage, coords, vec4(combined));
+    if(rtx.frameIndex > 0)
+    {
+        float alpha = 1.0 / float(rtx.frameIndex + 1);
+        imageStore(temporalAccumImage, coords, mix(history, newColour, alpha));
+    }
+    else
+    {
+        imageStore(temporalAccumImage, coords, newColour);
+    }
 }

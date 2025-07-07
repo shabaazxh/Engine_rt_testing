@@ -20,6 +20,7 @@
 #include "SpatialCompute.hpp"
 #include "GBuffer.hpp"
 #include "Candidates.hpp"
+#include "ShadingPass.hpp"
 
 namespace vk
 {
@@ -64,14 +65,14 @@ namespace vk
 		std::unique_ptr<ForwardPass>	  m_ForwardPass;
 		std::unique_ptr<GBuffer>	      m_GBuffer;
 		std::unique_ptr<Candidates>       m_CandidatesPass;
-		std::unique_ptr<ShadowMap>		  m_ShadowMap;
+		std::unique_ptr<ShadingPass>      m_ShadingPass;
 		std::unique_ptr<Composite>        m_CompositePass;
 		std::unique_ptr<PresentPass>	  m_PresentPass;
 		std::unique_ptr<RayPass>          m_RayPass;
 		std::unique_ptr<MotionVectors>    m_MotionVectorsPass;
 		std::unique_ptr<TemporalCompute>  m_TemporalComputePass;
 		std::unique_ptr<SpatialCompute>   m_SpatialComputePass;
-		// std::unique_ptr<History>          m_HistoryPass;
+		std::unique_ptr<History>          m_HistoryPass;
 		std::shared_ptr<Camera> m_camera;
 		MaterialManager m_materialManager;
 	};

@@ -13,7 +13,7 @@ namespace vk
 	{
 	public:
 
-		PresentPass(Context& context, Image& raypass_result, Image& composited_result);
+		PresentPass(Context& context, Image& CompositedResult, Image& AccumulationResult);
 		~PresentPass();
 		void Execute(VkCommandBuffer cmd, uint32_t imageIndex);
 		void Update();
@@ -23,8 +23,8 @@ namespace vk
 		void BuildDescriptors();
 
 		Context& context;
-		Image& raypass_result;
-		Image& composited_result;
+		Image& CompositedResult;
+		Image& AccumulationResult;
 
 		std::shared_ptr<Scene> scene;
 		std::shared_ptr<Camera> camera;

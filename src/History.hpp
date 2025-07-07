@@ -19,9 +19,7 @@ namespace vk
 		void Resize();
 	private:
 		void CreatePipeline();
-		void CreateRenderPass();
 		void BuildDescriptors();
-		void CreateFramebuffers();
 
 	private:
 		Context& context;
@@ -40,6 +38,5 @@ namespace vk
 		VkDescriptorSetLayout m_descriptorSetLayout;
 		std::vector<VkDescriptorSet> m_descriptorSets;
 		std::vector<Buffer> m_rtxSettingsUBO;
-		uint32_t accNumber;
 	};
 }

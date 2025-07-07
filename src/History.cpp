@@ -19,7 +19,7 @@ vk::History::History(Context& context, const Image& renderedImage) : context{con
 		m_width,
 		m_height,
 		VK_FORMAT_R16G16B16A16_SFLOAT,
-		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
 		VK_IMAGE_ASPECT_COLOR_BIT,
 		1
 	);
@@ -37,16 +37,23 @@ vk::History::History(Context& context, const Image& renderedImage) : context{con
 
 void vk::History::Update()
 {
+	static uint32_t MaxFramesToAccumulate = 1000;
+
 	if (isAccumulating)
 	{
-		accNumber += 1;
+		rtxSettings.frameIndex++;
+
+		if (rtxSettings.frameIndex >= MaxFramesToAccumulate)
+		{
+			rtxSettings.frameIndex = MaxFramesToAccumulate;
+			std::printf("Completed accumulation %d\n", rtxSettings.frameIndex);
+		}
 	}
 	else
 	{
-		accNumber = 0;
+		rtxSettings.frameIndex = -1;
 	}
-	rtxSettings.numPastFrames = rtxSettings.numPastFrames;
-	rtxSettings.frameIndex = (accNumber);
+
 	m_rtxSettingsUBO[currentFrame].WriteToBuffer(&rtxSettings, sizeof(RTX));
 }
 
@@ -98,8 +105,63 @@ void vk::History::Execute(VkCommandBuffer cmd)
 	RenderPassLabel(cmd, "HistoryPass");
 #endif // !DEBUG
 
-	// Transition temporal acc image from shader read only to general layout to read and write to it using this compute pass
-	ImageTransition(cmd, m_RenderTarget.image, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+
+	if (shouldClearBeforeDraw)
+	{
+		std::printf("Clearing History Render Target\n");
+		// Transition image to transfer destination layout for clearing
+		ImageTransition(
+			cmd,
+			m_RenderTarget.image,
+			VK_FORMAT_R16G16B16A16_SFLOAT,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			0, // srcAccessMask
+			VK_ACCESS_TRANSFER_WRITE_BIT, // dstAccessMask
+			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, // srcStageMask (or the previous stage)
+			VK_PIPELINE_STAGE_TRANSFER_BIT // dstStageMask
+		);
+
+		// Clear the image
+		VkClearColorValue clearColor = {};
+		clearColor.float32[0] = 0.0f;
+		clearColor.float32[1] = 0.0f;
+		clearColor.float32[2] = 0.0f;
+		clearColor.float32[3] = 0.0f;
+
+		VkImageSubresourceRange range = {};
+		range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		range.baseMipLevel = 0;
+		range.levelCount = 1;
+		range.baseArrayLayer = 0;
+		range.layerCount = 1;
+
+		vkCmdClearColorImage(cmd, m_RenderTarget.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &range);
+
+	}
+
+	// Transition to general layout for compute pass
+	if (shouldClearBeforeDraw) {
+
+		ImageTransition(
+			cmd,
+			m_RenderTarget.image,
+			VK_FORMAT_R16G16B16A16_SFLOAT,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			VK_IMAGE_LAYOUT_GENERAL,
+			VK_ACCESS_TRANSFER_WRITE_BIT,
+			VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+		);
+
+		shouldClearBeforeDraw = false;
+	}
+	else
+	{
+		// Transition temporal acc image from shader read only to general layout to read and write to it using this compute pass
+		ImageTransition(cmd, m_RenderTarget.image, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+	}
 
 	// Execute horizontal blur
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline);

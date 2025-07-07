@@ -120,17 +120,24 @@ namespace vk
 		alignas(4) int radius;
 	};
 
+	struct uShadingPass
+	{
+		alignas(4) int reservoir_pass;
+	};
+
 	inline PostProcessing postProcessSettings = {};
 	inline double deltaTime;
 	inline uint32_t setRenderingPipeline = 1;
 	inline uint32_t setAlphaMakingPipeline = 2;
-	inline RTX rtxSettings = { 1, 0, 2 };
+	inline RTX rtxSettings = { 1, 0, 1000 };
 	inline VkDescriptorSetLayout materialDescriptorSetLayout;
 	inline uint32_t frameNumber = 0;
 	inline bool isAccumulating = false;
+	inline bool shouldClearBeforeDraw = false;
 	inline uCandidatesPass CandidatesPassData = { 0, {1280, 720}, 32 };
 	inline uTemporalPass TemporalPassData = { 0, { 1280, 720 }, 20 };
-	inline uSpatialPass SpatialPassData = { 0, { 1280, 720 }, 20, 1 };
+	inline uSpatialPass SpatialPassData = { 0, { 1280, 720 }, 20, 30 };
+	inline uShadingPass ShadingPassData = { 0 };
 }
 
 namespace vk

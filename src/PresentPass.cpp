@@ -8,10 +8,10 @@
 #include "ImGuiRenderer.hpp"
 
 
-vk::PresentPass::PresentPass(Context& context, Image& raypass_result, Image& composited_result) :
+vk::PresentPass::PresentPass(Context& context, Image& CompositedResult, Image& AccumulationResult) :
 	context{ context },
-	composited_result{ composited_result },
-	raypass_result{ raypass_result },
+	CompositedResult{ CompositedResult },
+	AccumulationResult{ AccumulationResult },
 	m_pipeline { VK_NULL_HANDLE},
 	m_pipelineLayout{ VK_NULL_HANDLE },
 	m_renderType {renderType}
@@ -46,7 +46,7 @@ void vk::PresentPass::Resize()
 	{
 		VkDescriptorImageInfo imgInfo = {
 			.sampler = repeatSampler,
-			.imageView = composited_result.imageView,
+			.imageView = CompositedResult.imageView,
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		};
 
@@ -57,7 +57,7 @@ void vk::PresentPass::Resize()
 	{
 		VkDescriptorImageInfo imgInfo = {
 			.sampler = repeatSampler,
-			.imageView = raypass_result.imageView,
+			.imageView = AccumulationResult.imageView,
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		};
 
@@ -168,7 +168,7 @@ void vk::PresentPass::BuildDescriptors()
 	{
 		VkDescriptorImageInfo imgInfo = {
 			.sampler = repeatSampler,
-			.imageView = composited_result.imageView,
+			.imageView = CompositedResult.imageView,
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		};
 
@@ -179,7 +179,7 @@ void vk::PresentPass::BuildDescriptors()
 	{
 		VkDescriptorImageInfo imgInfo = {
 			.sampler = repeatSampler,
-			.imageView = raypass_result.imageView,
+			.imageView = AccumulationResult.imageView,
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		};
 

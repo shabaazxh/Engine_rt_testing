@@ -120,26 +120,25 @@ vk::Renderer::Renderer(Context& context) : context{context}
 
 	m_MotionVectorsPass = std::make_unique<MotionVectors>(context, m_camera, m_GBuffer->GetGBufferMRT().WorldPositions);
 
-	// For now, we should store the output from the temporal pass as "previous frame" and this should hopefully work
-	// Once that works, we can extend it and make previous frame be the output from the spatial pass
-	// We will begin with the temporal pass for testing to ensure temporal works
-	// Image& initial_candidates, Image& hit_world_positions, Image& hit_normals, Image& motion_vectors)
 	m_TemporalComputePass = std::make_unique<TemporalCompute>(context, m_scene, m_camera, m_CandidatesPass->GetInitialCandidates(), m_RayPass->GetWorldHitPositions(), m_RayPass->GetHitNormals(), m_MotionVectorsPass->GetRenderTarget(), m_GBuffer->GetGBufferMRT());
 
 	// Spatial pass will take in the temporal resampled reservoir results and spatially reuse to resample
 	m_SpatialComputePass = std::make_unique<SpatialCompute>(context, m_scene, m_camera, m_CandidatesPass->GetInitialCandidates(), m_RayPass->GetWorldHitPositions(), m_RayPass->GetHitNormals(), m_RayPass->GetAlbedo(), m_TemporalComputePass->GetRenderTarget(), m_GBuffer->GetGBufferMRT());
 
-	// A final shading pass should go here? Which takes in the Spatial reuse reservoirs and computes lighting. This could perhaps
-	// Happen in the spatial pass? Since we can spatially reuse for the current pixel and then use that updated reservoir for shading output from spatial pass
-	m_CompositePass		= std::make_unique<Composite>(context, m_SpatialComputePass->GetShadingResult());
+
+	m_ShadingPass = std::make_unique<ShadingPass>(context, m_scene, m_camera, m_GBuffer->GetGBufferMRT(), m_CandidatesPass->GetInitialCandidates(), m_TemporalComputePass->GetRenderTarget(), m_SpatialComputePass->GetRenderTarget());
+
+
+	// Whichever mode you select in the shading pass, will be the mode that is then accumualated in the history pass
+	m_HistoryPass = std::make_unique<History>(context, m_ShadingPass->GetRenderTarget());
+
+	// Shading pass is sent to composite to be gamma corrected
+	m_CompositePass		= std::make_unique<Composite>(context, m_ShadingPass->GetRenderTarget());
 
 	// Currently passing the spatial pass result to the composite to display, switch to RayPass to show initial candidates
-	m_PresentPass		= std::make_unique<PresentPass>(context, m_CandidatesPass->GetRenderTarget(), m_CompositePass->GetRenderTarget());
-
-	// @NOTE: The final reservoirs from spatial reuse are the ones which should be copied to temporal pass "previous frame"
+	m_PresentPass		= std::make_unique<PresentPass>(context, m_ShadingPass->GetRenderTarget(), m_HistoryPass->GetRenderTarget());
 
 	ImGuiRenderer::Initialize(context);
-	ImGuiRenderer::AddTexture(clampToEdgeSamplerAniso, m_GBuffer->GetGBufferMRT().Normal.imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 void vk::Renderer::Destroy()
@@ -149,12 +148,12 @@ void vk::Renderer::Destroy()
 	ImGuiRenderer::Shutdown(context);
 	m_DepthPrepass.reset();
 	m_GBuffer.reset();
+	m_ShadingPass.reset();
 	m_CandidatesPass.reset();
 	m_MotionVectorsPass.reset();
 	m_TemporalComputePass.reset();
 	m_SpatialComputePass.reset();
 	m_ForwardPass.reset();
-	m_ShadowMap.reset();
 	m_CompositePass.reset();
 	m_PresentPass.reset();
 	m_camera.reset();
@@ -289,7 +288,6 @@ void vk::Renderer::Render(double deltaTime)
 		context.RecreateSwapchain();
 		m_RayPass->Resize();
 		m_DepthPrepass->Resize();
-		m_ShadowMap->Resize();
 		m_ForwardPass->Resize();
 		m_CompositePass->Resize();
 		m_PresentPass->Resize();
@@ -312,13 +310,13 @@ void vk::Renderer::Render(double deltaTime)
 		VK_CHECK(vkBeginCommandBuffer(cmd, &beginInfo), "Failed to begin command buffer");
 
 
-		// m_DepthPrepass->Execute(cmd);
 		m_GBuffer->Execute(cmd);
 		m_CandidatesPass->Execute(cmd);
-		// m_RayPass->Execute(cmd);
 		m_MotionVectorsPass->Execute(cmd);
 		m_TemporalComputePass->Execute(cmd);
 		m_SpatialComputePass->Execute(cmd);
+		m_ShadingPass->Execute(cmd);
+		m_HistoryPass->Execute(cmd);
 
 		m_CompositePass->Execute(cmd);
 		m_PresentPass->Execute(cmd, index);
@@ -381,7 +379,6 @@ void vk::Renderer::Present(uint32_t imageIndex)
 		context.RecreateSwapchain();
 		m_RayPass->Resize();
 		m_DepthPrepass->Resize();
-		m_ShadowMap->Resize();
 		m_ForwardPass->Resize();
 		m_CompositePass->Resize();
 		m_PresentPass->Resize();
@@ -400,8 +397,9 @@ void vk::Renderer::Update(double deltaTime)
 	m_RayPass->Update();
 	m_TemporalComputePass->Update();
 	m_SpatialComputePass->Update();
+	m_ShadingPass->Update();
+	m_HistoryPass->Update();
 	// Update passes
-	m_ShadowMap->Update();
 	m_ForwardPass->Update();
 	m_PresentPass->Update();
 }
@@ -460,6 +458,11 @@ void vk::Renderer::glfwHandleKeyboard(GLFWwindow* window, int key, int scancode,
 		std::cout << "Temporal: " << result << std::endl;
 
 		isAccumulating = postProcessSettings.Enable == true ? true : false;
+		if (isAccumulating)
+		{
+			// Should clear before draw enable here
+			shouldClearBeforeDraw = true;
+		}
 	}
 }
 

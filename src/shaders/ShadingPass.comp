@@ -1,0 +1,123 @@
+#version 460
+// @TODO: REMEMBER THE NORMALS FROM THE GBUFFER ARE 0-1 AND NEED TO BE CONVERTED BACK TO
+// -1-1 RANGE BY DOING * 2.0 - 1.0
+
+#extension GL_EXT_ray_query : enable
+#extension GL_EXT_ray_tracing : enable
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+const int NUM_LIGHTS = 100;
+
+#define PI 3.14159265359
+
+struct Light
+{
+	int Type;
+	vec4 LightPosition;
+	vec4 LightColour;
+	mat4 LightSpaceMatrix;
+};
+
+layout(set = 0, binding = 0) uniform ShadingPassUniforms
+{
+    int reservoir_pass;
+} shading_ubo;
+
+
+layout(set = 0, binding = 1) uniform LightBuffer {
+	Light lights[NUM_LIGHTS];
+} lightData;
+
+layout(set = 0, binding = 2) uniform accelerationStructureEXT topLevelAS;
+layout(set = 0, binding = 3) uniform sampler2D g_buffer_world_position;
+layout(set = 0, binding = 4) uniform sampler2D g_buffer_normals;
+layout(set = 0, binding = 5) uniform sampler2D g_albedo;
+layout(set = 0, binding = 6) uniform sampler2D initial_candidates_texture;
+layout(set = 0, binding = 7) uniform sampler2D temporal_pass_reservoirs;
+layout(set = 0, binding = 8) uniform sampler2D spatial_pass_reservoirs;
+layout(set = 0, binding = 9, rgba32f) uniform image2D shading_result_image;
+
+
+struct Reservoir
+{
+    int index;
+    float W_y;
+    float W_sum;
+    int M;
+};
+
+float inShadow(vec3 position, vec3 normal, float distToLight, vec3 lightDir)
+{
+    rayQueryEXT rq;
+    rayQueryInitializeEXT(rq, topLevelAS,
+                          gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT,
+                          0xFF,
+                          position + normal * 0.001, // offset to avoid self-intersection
+                          0.0,
+                          lightDir,
+                          distToLight);
+
+    while (rayQueryProceedEXT(rq)) {
+        // Just keep iterating until first hit or end
+    }
+    bool occluded = rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionNoneEXT;
+
+    return occluded ? 0.0 : 1.0;
+}
+
+Reservoir SelectReservoirPass()
+{
+    Reservoir reservoir;
+
+    vec4 reservoir_data;
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+
+    switch (shading_ubo.reservoir_pass)
+    {
+        case 0:
+            reservoir_data = texelFetch(initial_candidates_texture, coord, 0);
+            break;
+        case 1:
+            reservoir_data = texelFetch(spatial_pass_reservoirs, coord, 0);
+            // reservoir_data = texelFetch(temporal_pass_reservoirs, coord, 0); // doesn't make sense since temporal still takes data from spatial, its not literally only spatial because of the way its coded in the shader
+            break;
+        default:
+            reservoir_data = vec4(0.0);
+            break;
+    }
+
+    reservoir.index = int(reservoir_data.x);
+    reservoir.W_y = reservoir_data.y;
+    reservoir.M = int(reservoir_data.z);
+
+    return reservoir;
+}
+
+
+void main() {
+
+    ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+    vec3 throughput = vec3(1.0);
+
+    // Get world and normal data
+    vec4 world_position = texelFetch(g_buffer_world_position, coords, 0);
+    vec4 world_normal   = texelFetch(g_buffer_normals, coords, 0) * 2.0 - 1.0;
+    vec3 albedo = texelFetch(g_albedo, coords, 0).rgb;
+
+    Reservoir reservoir = SelectReservoirPass();
+
+    Light L = lightData.lights[reservoir.index];
+
+    vec3 light_dir = normalize(L.LightPosition.xyz - world_position.xyz);
+    float dist = length(L.LightPosition.xyz - world_position.xyz);
+    float LightIntensity = 1000.0f * (1.0 / (dist * dist));
+    float F_x = max(dot(world_normal.xyz, light_dir), 0.0) * LightIntensity;
+
+    float Visibility = inShadow(world_position.xyz, world_normal.xyz, dist, light_dir);
+
+    vec3 directlighting = albedo * F_x * L.LightColour.rgb;
+    vec3 radiance = throughput * directlighting * reservoir.W_y * Visibility;
+
+    imageStore(shading_result_image, coords, vec4(radiance.rgb, 0.0));
+}
