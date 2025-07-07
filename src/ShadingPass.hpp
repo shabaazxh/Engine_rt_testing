@@ -44,7 +44,6 @@ namespace vk
 		Image& SpatialPassReservoirs;
 
 		Image m_RenderTarget;
-		Image m_TemporaryShadingResult;
 
 		VkPipeline m_Pipeline;
 		VkPipelineLayout m_PipelineLayout;

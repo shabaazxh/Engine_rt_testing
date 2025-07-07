@@ -185,17 +185,6 @@ void vk::Candidates::Resize()
 
 		UpdateDescriptorSet(context, 5, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	}
-
-	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
-	{
-		VkDescriptorImageInfo imageInfo = {
-			.sampler = VK_NULL_HANDLE,
-			.imageView = m_ShadingResult.imageView,
-			.imageLayout = VK_IMAGE_LAYOUT_GENERAL
-		};
-
-		UpdateDescriptorSet(context, 6, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	}
 }
 
 void vk::Candidates::Execute(VkCommandBuffer cmd)
@@ -285,8 +274,7 @@ void vk::Candidates::BuildDescriptors()
 			CreateDescriptorBinding(3, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT), // GBuffer : World normal
 			CreateDescriptorBinding(4, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT), // GBuffer : Albedo
 			CreateDescriptorBinding(5, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT), // reservoir storage image
-			CreateDescriptorBinding(6, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT), // shading storage image
-			CreateDescriptorBinding(7, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_COMPUTE_BIT), // TLAS
+			CreateDescriptorBinding(6, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_COMPUTE_BIT), // TLAS
 		};
 
 		m_descriptorSetLayout = CreateDescriptorSetLayout(context, bindings);
@@ -362,17 +350,6 @@ void vk::Candidates::BuildDescriptors()
 
 	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
 	{
-		VkDescriptorImageInfo imageInfo = {
-			.sampler = VK_NULL_HANDLE,
-			.imageView = m_ShadingResult.imageView,
-			.imageLayout = VK_IMAGE_LAYOUT_GENERAL
-		};
-
-		UpdateDescriptorSet(context, 6, imageInfo, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	}
-
-	for (size_t i = 0; i < (size_t)MAX_FRAMES_IN_FLIGHT; i++)
-	{
-		UpdateDescriptorSet(context, 7, scene->TopLevelAccelerationStructure.handle, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR);
+		UpdateDescriptorSet(context, 6, scene->TopLevelAccelerationStructure.handle, m_descriptorSets[i], VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR);
 	}
 }

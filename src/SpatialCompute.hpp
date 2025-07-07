@@ -22,7 +22,6 @@ namespace vk
 		void Resize();
 
 		Image& GetRenderTarget() { return m_RenderTarget; }
-		Image& GetShadingResult() { return m_TemporaryShadingResult; }
 	private:
 		void CreatePipeline();
 		void BuildDescriptors();
@@ -31,7 +30,6 @@ namespace vk
 		std::shared_ptr<Scene> scene;
 		std::shared_ptr<Camera> camera;
 		Image m_RenderTarget;
-		Image m_TemporaryShadingResult;
 
 		Image& initial_candidates;
 		Image& temporal_pass_reservoirs;

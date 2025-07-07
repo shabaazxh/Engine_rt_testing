@@ -34,8 +34,7 @@ layout(set = 0, binding = 2) uniform sampler2D g_world_positions;
 layout(set = 0, binding = 3) uniform sampler2D g_world_normals;
 layout(set = 0, binding = 4) uniform sampler2D g_albedo;
 layout(set = 0, binding = 5, rgba32f) uniform image2D reservoir_output_image;
-layout(set = 0, binding = 6, rgba32f) uniform image2D shading_result_image;
-layout(set = 0, binding = 7) uniform accelerationStructureEXT topLevelAS;
+layout(set = 0, binding = 6) uniform accelerationStructureEXT topLevelAS;
 
 
 // Reference: https://github.com/NVIDIAGameWorks/RTXGI-DDGI/blob/main/samples/test-harness/shaders/include/Random.hlsl#L42
@@ -159,13 +158,12 @@ This means W_x is not a determiistic function of X, its a random variable. Since
 
 */
 
-vec3 RISReservoirSampling(vec3 pos, vec3 n, vec3 albedo)
+void RISReservoirSampling(vec3 pos, vec3 n, vec3 albedo)
 {
     uvec2 dispatchSize = uvec2(cand_ubo.viewportSize / 8);
     uint launchWidth = dispatchSize.x * gl_WorkGroupSize.x;
     uint seed = uint(gl_GlobalInvocationID.y * launchWidth) + gl_GlobalInvocationID.x;
     seed *= cand_ubo.frameIndex;
-    // seed = WangHash(seed);
 
     vec3 radiance = vec3(0.0);
     vec3 throughput = vec3(1.0);
@@ -192,16 +190,11 @@ vec3 RISReservoirSampling(vec3 pos, vec3 n, vec3 albedo)
         // Compute the light weight to prevent bias
         // W_x = (sum(w_i) / M) / pdf(x)
         // Written as: 1 / pdf(x) * (1 / m * sum(w_i)), but remember 1 / pdf(x) and 1 / m is the same as dividing by them since 1 / x is rcp
-        float Fx = max(dot(n, light_dir), 0.0) * LightIntensity;
-        float target_function = 1.0 / Fx; //  float(NUM_LIGHTS);
-
-        // This is debug to ensure its valid, remove eventually -> this has an issue atm @TODO
-        if (isinf(target_function))
-            return vec3(1.0, 0.0, 1.0);
+        float F_x = max(dot(n, light_dir), 0.0) * LightIntensity;
 
         // Evaluate the unbiased constribuion weight W_x
         // We moved rcpM = 1 / float(CANDIDATE_MAX) to func RISReservoir which is computing weight for each candidate as suggested by paper
-        reservoir.W_y = target_function * (reservoir.W_sum);
+        reservoir.W_y = F_x > 0.0 ? (1.0 / F_x) * (reservoir.W_sum) : 0.0;
 
         // Perform visibility testing. Set reservoir weight to 0 if in shadow
         float Visibility = inShadow(pos, n, dist, light_dir);
@@ -209,12 +202,7 @@ vec3 RISReservoirSampling(vec3 pos, vec3 n, vec3 albedo)
 
         // Store the current select sample Y, number of candidates M, and probabilistic weight W_y
         imageStore(reservoir_output_image, ivec2(gl_GlobalInvocationID.xy), vec4(reservoir.index, reservoir.W_y, reservoir.M, 0.0));
-
-        vec3 directLighting = albedo * Fx * LightSource.LightColour.rgb;
-        radiance += throughput * directLighting * reservoir.W_y * Visibility;
     }
-
-    return radiance;
 }
 
 void main() {
@@ -226,7 +214,5 @@ void main() {
     vec4 world_normal   = texelFetch(g_world_normals, coords, 0) * 2.0 - 1.0;
     vec4 albedo = texelFetch(g_albedo, coords, 0);
 
-    vec3 radiance = RISReservoirSampling(world_position.xyz, world_normal.xyz, albedo.rgb);
-
-    imageStore(shading_result_image, coords, vec4(radiance, 0.0));
+    RISReservoirSampling(world_position.xyz, world_normal.xyz, albedo.rgb);
 }

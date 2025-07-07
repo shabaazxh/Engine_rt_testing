@@ -41,18 +41,6 @@ vk::ShadingPass::ShadingPass(Context& context, std::shared_ptr<Scene>& scene, st
 		1
 	);
 
-	m_TemporaryShadingResult = CreateImageTexture2D(
-		"TempShadingShadingPassRT",
-		context,
-		m_width,
-		m_height,
-		VK_FORMAT_R32G32B32A32_SFLOAT,
-		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-		VK_IMAGE_ASPECT_COLOR_BIT,
-		1
-	);
-
-
 	ExecuteSingleTimeCommands(context, [&](VkCommandBuffer cmd) {
 
 		ImageTransition(
@@ -63,16 +51,6 @@ vk::ShadingPass::ShadingPass(Context& context, std::shared_ptr<Scene>& scene, st
 			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0,
 			VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
 		);
-
-		ImageTransition(
-			cmd,
-			m_TemporaryShadingResult.image,
-			VK_FORMAT_R32G32B32A32_SFLOAT,
-			VK_IMAGE_LAYOUT_UNDEFINED,
-			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0,
-			VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-		);
-
 	});
 
 	BuildDescriptors();
@@ -86,7 +64,6 @@ vk::ShadingPass::~ShadingPass()
 		buffer.Destroy(context.device);
 	}
 	m_RenderTarget.Destroy(context.device);
-	m_TemporaryShadingResult.Destroy(context.device);
 	vkDestroyPipeline(context.device, m_Pipeline, nullptr);
 	vkDestroyPipelineLayout(context.device, m_PipelineLayout, nullptr);
 	vkDestroyDescriptorSetLayout(context.device, m_descriptorSetLayout, nullptr);
@@ -95,7 +72,6 @@ vk::ShadingPass::~ShadingPass()
 void vk::ShadingPass::Resize()
 {
 	m_RenderTarget.Destroy(context.device);
-	m_TemporaryShadingResult.Destroy(context.device);
 
 	m_width = context.extent.width;
 	m_height = context.extent.height;
@@ -111,18 +87,6 @@ void vk::ShadingPass::Resize()
 		1
 	);
 
-	m_TemporaryShadingResult = CreateImageTexture2D(
-		"TempShadingShadingPassRT",
-		context,
-		m_width,
-		m_height,
-		VK_FORMAT_R32G32B32A32_SFLOAT,
-		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-		VK_IMAGE_ASPECT_COLOR_BIT,
-		1
-	);
-
-
 	ExecuteSingleTimeCommands(context, [&](VkCommandBuffer cmd) {
 
 		ImageTransition(
@@ -133,16 +97,6 @@ void vk::ShadingPass::Resize()
 			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0,
 			VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
 		);
-
-		ImageTransition(
-			cmd,
-			m_TemporaryShadingResult.image,
-			VK_FORMAT_R32G32B32A32_SFLOAT,
-			VK_IMAGE_LAYOUT_UNDEFINED,
-			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0,
-			VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-		);
-
 	});
 
 	// G-Buffer World position
@@ -251,15 +205,6 @@ void vk::ShadingPass::Execute(VkCommandBuffer cmd)
 		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
 	);
 
-	ImageTransition(
-		cmd,
-		m_TemporaryShadingResult.image,
-		VK_FORMAT_R32G32B32A32_SFLOAT,
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
-		VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
-	);
-
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_Pipeline);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_PipelineLayout, 0, 1, &m_descriptorSets[currentFrame], 0, nullptr);
 
@@ -269,16 +214,6 @@ void vk::ShadingPass::Execute(VkCommandBuffer cmd)
 	ImageTransition(
 		cmd,
 		m_RenderTarget.image,
-		VK_FORMAT_R32G32B32A32_SFLOAT,
-		VK_IMAGE_LAYOUT_GENERAL,
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-	);
-
-	ImageTransition(
-		cmd,
-		m_TemporaryShadingResult.image,
 		VK_FORMAT_R32G32B32A32_SFLOAT,
 		VK_IMAGE_LAYOUT_GENERAL,
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,

@@ -35,13 +35,10 @@ layout(set = 0, binding = 1) uniform LightBuffer {
 layout(set = 0, binding = 2) uniform sampler2D initial_candidates_texture;
 layout(set = 0, binding = 3) uniform sampler2D temporal_pass_reservoirs;
 layout(set = 0, binding = 4, rgba32f) uniform image2D reservoir_output_image;
-layout(set = 0, binding = 5, rgba32f) uniform image2D shading_result_image;
-
-layout(set = 0, binding = 6) uniform accelerationStructureEXT topLevelAS;
-
-layout(set = 0, binding = 7) uniform sampler2D g_buffer_world_position;
-layout(set = 0, binding = 8) uniform sampler2D g_buffer_normals;
-layout(set = 0, binding = 9) uniform sampler2D g_albedo;
+layout(set = 0, binding = 5) uniform accelerationStructureEXT topLevelAS;
+layout(set = 0, binding = 6) uniform sampler2D g_buffer_world_position;
+layout(set = 0, binding = 7) uniform sampler2D g_buffer_normals;
+layout(set = 0, binding = 8) uniform sampler2D g_albedo;
 
 struct Reservoir
 {
@@ -263,7 +260,7 @@ Reservoir combine_reservoirs_spatial_reuse(vec4 current_pixel_reservoir_data, in
 }
 
 // Spatial reuse begins here with this function
-vec4 Spatial(vec3 n, vec3 pos, vec3 albedo)
+void Spatial(vec3 n, vec3 pos, vec3 albedo)
 {
     uvec2 dispatchSize = uvec2(spatial_ubo.viewportSize / 8);
     uint launchWidth = dispatchSize.x * gl_WorkGroupSize.x;
@@ -283,7 +280,6 @@ vec4 Spatial(vec3 n, vec3 pos, vec3 albedo)
 
     if(!isValidReservoir) {
         imageStore(reservoir_output_image, ivec2(gl_GlobalInvocationID.xy), vec4(reservoir.index, 0.0, 0, 0.0));
-        return vec4(0, 0, 0, 1); // No valid reservoir found, return empty
     }
     Light L = lightData.lights[reservoir.index];
 
@@ -304,56 +300,16 @@ vec4 Spatial(vec3 n, vec3 pos, vec3 albedo)
     reservoir.W_y = F_x > 0.0 ? (1.0 / F_x) * (m * reservoir.W_sum) : 0.0;
 
     imageStore(reservoir_output_image, ivec2(gl_GlobalInvocationID.xy), vec4(reservoir.index, reservoir.W_y, reservoir.M, 0.0));
-
-    // vec3 directLighting = albedo * F_x * L.LightColour.rgb;
-    // vec3 radiance = throughput * directLighting * reservoir.W_y * Visibility;
-
-    return vec4(vec3(1), 1.0);
-
 }
 
 void main() {
 
     ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
 
-    vec3 throughput = vec3(1.0);
-
     // Get world and normal data
     vec4 world_position = texelFetch(g_buffer_world_position, coords, 0);
     vec4 world_normal   = normalize(texelFetch(g_buffer_normals, coords, 0) * 2.0 - 1.0);
-    // vec4 reservoir_from_temporal = texelFetch(temporal_pass_reservoirs, coords, 0);
-
     vec3 albedo = texelFetch(g_albedo, coords, 0).rgb;
 
-    vec4 radiance = Spatial(world_normal.xyz, world_position.xyz, albedo);
-
-//    uint reservoir_index = int(reservoir_from_temporal.x);
-//    float reservoir_W_y = reservoir_from_temporal.y;
-//    int M = int(reservoir_from_temporal.z);
-//
-//    vec4 finalColour = vec4(0);
-//    bool is_invalid = false;
-//    Light L = lightData.lights[reservoir_index];
-//
-//    // Compute lighting using this light source
-//    vec3 LightDir = normalize(L.LightPosition.xyz - world_position.xyz);
-//    float dist = length(L.LightPosition.xyz - world_position.xyz);
-//    float att = 1.0 / (dist * dist);
-//    float intensity = 1000.0f * att;
-//    float Fx = max(dot(world_normal.xyz, LightDir), 0.001) * intensity; // Simplied F(x) only doing diffuse
-//
-//    float target_function = 1.0 / Fx;
-//
-//    if(isinf(target_function) || isnan(target_function))
-//    {
-//        is_invalid = true;
-//    }
-//
-//    float Visibility = inShadow(world_position.xyz, world_normal.xyz, dist, LightDir);
-//    vec3 directLighting = albedo * Fx * L.LightColour.rgb;
-//    vec3 radiance = throughput * directLighting * reservoir_W_y;
-
-    // radiance = is_invalid ? vec3(1, 0, 0) : radiance;
-    imageStore(shading_result_image, coords, vec4(radiance.rgb, 0.0));
-
+    Spatial(world_normal.xyz, world_position.xyz, albedo);
 }
