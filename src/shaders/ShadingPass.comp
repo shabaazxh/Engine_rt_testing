@@ -100,10 +100,17 @@ void main() {
 
     // Get world and normal data
     vec4 world_position = texelFetch(g_buffer_world_position, coords, 0);
-    vec4 world_normal   = texelFetch(g_buffer_normals, coords, 0) * 2.0 - 1.0;
+    vec3 world_normal   = normalize(texelFetch(g_buffer_normals, coords, 0).xyz * 2.0 - 1.0);
     vec3 albedo = texelFetch(g_albedo, coords, 0).rgb;
 
     Reservoir reservoir = SelectReservoirPass();
+
+    bool isValidReservoir = reservoir.index >= 0;
+
+    if(!isValidReservoir) {
+        imageStore(shading_result_image, coords, vec4(0.0, 0.0, 0.0, 1.0)); // shade with red for invalid reservoirs
+        return;
+    }
 
     Light L = lightData.lights[reservoir.index];
 

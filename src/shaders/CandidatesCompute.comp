@@ -140,7 +140,7 @@ void RISReservoir(inout Reservoir reservoir, inout uint seed, vec3 pos, vec3 n, 
         float F_x = max(dot(n, light_dir), 0.0) * LightIntensity; // Simplied F(x) for weighting. Not sure if need to compute entir BRDF * cosine * ....?  // The target function F(x) that PDF(X) approximates better with more candidates. Using lambert cosine term but this can be other importance sampling methods
 
         // This is p^q(x_i) / p(x_i) where p^q(x_i) is the target function F_x and p(x_i) is the PDF of the uniform distribution which is 1 / NUM_LIGHTS. So we can compute the weight as F_x * rcpUniformDistributionWeight = F_x * (1 / NUM_LIGHTS) = F_x / NUM_LIGHTS
-        float xi_weight = F_x > 0.0 ? rcpM * F_x * rcpUniformDistributionWeight : 0.0; // Move 1.0 / M to here when computing weight as suggested
+        float xi_weight = F_x > 0 ? rcpM * F_x * rcpUniformDistributionWeight : 0.0; // Move 1.0 / M to here when computing weight as suggested
         update(seed, reservoir, xi_weight, randomLightIndex);
     }
 }
@@ -177,32 +177,37 @@ void RISReservoirSampling(vec3 pos, vec3 n, vec3 albedo)
     // Compute the weights of the candidates from the original distribution
     RISReservoir(reservoir, seed, pos, n, albedo);
 
-    bool isValidIndex = reservoir.index > -1;
+    bool isValidIndex = reservoir.index >= 0;
 
-    if(isValidIndex) {
-        // The selected light
-        int light_index = reservoir.index;
-        Light LightSource = lightData.lights[light_index];
-        float dist = length(LightSource.LightPosition.xyz - pos);
-        vec3 light_dir = normalize(LightSource.LightPosition.xyz - pos);
-        float LightIntensity = 1000.0f * (1.0 / (dist * dist));
-
-        // Compute the light weight to prevent bias
-        // W_x = (sum(w_i) / M) / pdf(x)
-        // Written as: 1 / pdf(x) * (1 / m * sum(w_i)), but remember 1 / pdf(x) and 1 / m is the same as dividing by them since 1 / x is rcp
-        float F_x = max(dot(n, light_dir), 0.0) * LightIntensity;
-
-        // Evaluate the unbiased constribuion weight W_x
-        // We moved rcpM = 1 / float(CANDIDATE_MAX) to func RISReservoir which is computing weight for each candidate as suggested by paper
-        reservoir.W_y = F_x > 0.0 ? (1.0 / F_x) * (reservoir.W_sum) : 0.0;
-
-        // Perform visibility testing. Set reservoir weight to 0 if in shadow
-        float Visibility = inShadow(pos, n, dist, light_dir);
-        reservoir.W_y *= Visibility;
-
-        // Store the current select sample Y, number of candidates M, and probabilistic weight W_y
-        imageStore(reservoir_output_image, ivec2(gl_GlobalInvocationID.xy), vec4(reservoir.index, reservoir.W_y, reservoir.M, 0.0));
+    if(!isValidIndex)
+    {
+        imageStore(reservoir_output_image, ivec2(gl_GlobalInvocationID.xy), vec4(-1, 0.0, 0.0, 0.0));
+        return;
     }
+
+    // The selected light
+    int light_index = reservoir.index;
+    Light LightSource = lightData.lights[light_index];
+    float dist = length(LightSource.LightPosition.xyz - pos);
+    vec3 light_dir = normalize(LightSource.LightPosition.xyz - pos);
+    float LightIntensity = 1000.0f * (1.0 / (dist * dist));
+
+    // Compute the light weight to prevent bias
+    // W_x = (sum(w_i) / M) / pdf(x)
+    // Written as: 1 / pdf(x) * (1 / m * sum(w_i)), but remember 1 / pdf(x) and 1 / m is the same as dividing by them since 1 / x is rcp
+    float F_x = max(dot(n, light_dir), 0.0) * LightIntensity;
+
+    // Evaluate the unbiased constribuion weight W_x
+    // We moved rcpM = 1 / float(CANDIDATE_MAX) to func RISReservoir which is computing weight for each candidate as suggested by paper
+    reservoir.W_y = F_x > 0 ? (1.0 / F_x) * (reservoir.W_sum) : 0.0;
+
+    // Perform visibility testing. Set reservoir weight to 0 if in shadow
+    float Visibility = inShadow(pos, n, dist, light_dir);
+    reservoir.W_y *= Visibility;
+
+    // Store the current select sample Y, number of candidates M, and probabilistic weight W_y
+    imageStore(reservoir_output_image, ivec2(gl_GlobalInvocationID.xy), vec4(reservoir.index, reservoir.W_y, reservoir.M, 0.0));
+
 }
 
 void main() {
@@ -211,7 +216,7 @@ void main() {
 
     // Get world and normal data
     vec4 world_position = texelFetch(g_world_positions, coords, 0);
-    vec4 world_normal   = texelFetch(g_world_normals, coords, 0) * 2.0 - 1.0;
+    vec3 world_normal   = normalize(texelFetch(g_world_normals, coords, 0).xyz * 2.0 - 1.0);
     vec4 albedo = texelFetch(g_albedo, coords, 0);
 
     RISReservoirSampling(world_position.xyz, world_normal.xyz, albedo.rgb);

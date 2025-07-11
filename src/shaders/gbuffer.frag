@@ -51,7 +51,7 @@ layout(set = 1, binding = 1) uniform sampler2D metallicRoughness;
 void main()
 {
 	vec4 color = texture(albedoTexture, uv);
-    vec3 world_normal = (WorldNormal).xyz;
+    vec3 world_normal = normalize(WorldNormal).xyz;
 	float roughness = texture(metallicRoughness, uv).b;
 	float metallic = texture(metallicRoughness, uv).g;
 
